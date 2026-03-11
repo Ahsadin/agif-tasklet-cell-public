@@ -1,0 +1,46 @@
+{
+  "cell_format_version": "0.1.0",
+  "id": "cell.invoice_completeness_validator_v1",
+  "name": "Invoice Completeness Validator v1",
+  "version": "1.0.0",
+  "runner_compat": {
+    "runner_api_version": "runner-v0.1",
+    "execution_kind": "wasi"
+  },
+  "determinism": {
+    "mode": "strict",
+    "seed": 4046
+  },
+  "limits": {
+    "max_wall_ms": 300,
+    "max_steps": 1200,
+    "max_memory_mb": 64,
+    "max_output_bytes": 32768,
+    "max_tool_calls": 1
+  },
+  "contracts": {
+    "input_schema_path": "schemas/input.schema.json",
+    "output_schema_path": "schemas/output.schema.json"
+  },
+  "verifier": {
+    "tests_path": "verifier/tests.json",
+    "comparison": {
+      "mode": "canonical_json"
+    }
+  },
+  "capabilities": {
+    "network": false,
+    "filesystem": {
+      "preopens": []
+    }
+  },
+  "licensing": {
+    "spdx_ids": [
+      "MIT"
+    ],
+    "notices_path": "licenses/THIRD_PARTY_NOTICES.txt"
+  },
+  "integrity": {
+    "hash_manifest_path": "hashes/sha256.json"
+  }
+}

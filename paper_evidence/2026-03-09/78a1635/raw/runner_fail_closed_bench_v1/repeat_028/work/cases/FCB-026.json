@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_INTEGRITY_METADATA_MISSING",
+  "case_id": "FCB-026",
+  "category": "integrity_metadata",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_028/work/bundles/FCB-026.cell"
+  ],
+  "description": "Missing signature metadata file",
+  "elapsed_ms": 220.83904199826065,
+  "expected_codes": [
+    "BUNDLE_INTEGRITY_METADATA_MISSING"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_INTEGRITY_METADATA_MISSING\",\"message\":\"Bundle integrity metadata missing: signature metadata (signature_path) file missing: integrity/signature.json\"}}\n",
+  "unsafe_allow": false
+}

@@ -1,0 +1,23 @@
+{
+  "actual_code": "HASH_MISMATCH",
+  "case_id": "FCB-008",
+  "category": "schema",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_010/work/bundles/FCB-008.cell"
+  ],
+  "description": "Invalid manifest JSON",
+  "elapsed_ms": 64.87508400459774,
+  "expected_codes": [
+    "BUNDLE_MANIFEST_INVALID_JSON",
+    "HASH_MISMATCH"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"HASH_MISMATCH\",\"message\":\"Bundle hash verification failed: hash mismatch for file: manifest.json\"}}\n",
+  "unsafe_allow": false
+}

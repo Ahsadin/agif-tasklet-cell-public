@@ -1,0 +1,8 @@
+{
+  "licenses/THIRD_PARTY_NOTICES.txt": "e74fa0bdfc84a031cd7bd725bc30b583c01eeae3b411d20de1e035814d67deab",
+  "logic/logic.wasm": "93a44bbb96c751218e4c00d479e4c14358122a389acca16205b1e4d0dc5f9476",
+  "manifest.json": "e19008a1c840422efd21dc89fe600a93cb79850af9a5fb162dfd8a071fb49aa3",
+  "schemas/input.schema.json": "49c7b21ff45de39f6f0b5e99929d09be40855b2846ed13c703bbec3aa31145f1",
+  "schemas/output.schema.json": "49c7b21ff45de39f6f0b5e99929d09be40855b2846ed13c703bbec3aa31145f1",
+  "verifier/tests.json": "73e70e42875f0a0dced81909089b4f81fef9788ba8a80c182f5cf9717fe4756c"
+}

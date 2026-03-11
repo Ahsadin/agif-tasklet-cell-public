@@ -1,0 +1,106 @@
+{
+  "data": {
+    "case_count": 4,
+    "command": "review_hallucination_bench",
+    "gates": {
+      "abstain_accuracy": true,
+      "determinism": true,
+      "hallucination_resistance_score": true,
+      "reason_accuracy": true,
+      "unsafe_allow_zero": true
+    },
+    "metrics": {
+      "abstain_accuracy": 1.0,
+      "abstain_case_count": 3,
+      "determinism_rate": 1.0,
+      "hallucination_resistance_score": 1.0,
+      "latency_ms": {
+        "mean": 9.0,
+        "p50": 9.0,
+        "p95": 9.0,
+        "p99": 9.0,
+        "std": 0.0
+      },
+      "memory_mb": {
+        "max": 0.001731,
+        "mean": 0.0015145,
+        "std": 0.0001767378001447341
+      },
+      "over_abstain_count": 0,
+      "reason_accuracy": 1.0,
+      "unsafe_allow_count": 0
+    },
+    "rows": [
+      {
+        "abstain_match": true,
+        "actual_abstain": false,
+        "actual_reason": "",
+        "case_id": "RHB-001",
+        "claim_support_score": 0.93,
+        "deterministic_match": true,
+        "elapsed_ms": 9.0,
+        "expected_abstain": false,
+        "expected_reason": "",
+        "memory_mb_used": 0.0015,
+        "output_hash": "143325c7846837f345c12ec49b9eb42acb4d8641091ea9ee5442705204781199",
+        "over_abstain": false,
+        "reason_match": true,
+        "score": 1.0,
+        "unsafe_allow": false
+      },
+      {
+        "abstain_match": true,
+        "actual_abstain": true,
+        "actual_reason": "LOW_CLAIM_SUPPORT",
+        "case_id": "RHB-002",
+        "claim_support_score": 0.4,
+        "deterministic_match": true,
+        "elapsed_ms": 9.0,
+        "expected_abstain": true,
+        "expected_reason": "LOW_CLAIM_SUPPORT",
+        "memory_mb_used": 0.001583,
+        "output_hash": "66fa1e214b08b2c278c83969752dca754ee84fb4312201567b6d975b5d648e61",
+        "over_abstain": false,
+        "reason_match": true,
+        "score": 1.0,
+        "unsafe_allow": false
+      },
+      {
+        "abstain_match": true,
+        "actual_abstain": true,
+        "actual_reason": "EVIDENCE_MISSING",
+        "case_id": "RHB-003",
+        "claim_support_score": 0.92,
+        "deterministic_match": true,
+        "elapsed_ms": 9.0,
+        "expected_abstain": true,
+        "expected_reason": "EVIDENCE_MISSING",
+        "memory_mb_used": 0.001244,
+        "output_hash": "8eb712a9a64d710640daa99b9cf54e67c6f3b609dee3bb9b2230c798c4cd6754",
+        "over_abstain": false,
+        "reason_match": true,
+        "score": 1.0,
+        "unsafe_allow": false
+      },
+      {
+        "abstain_match": true,
+        "actual_abstain": true,
+        "actual_reason": "EVIDENCE_CONFLICT",
+        "case_id": "RHB-004",
+        "claim_support_score": 0.92,
+        "deterministic_match": true,
+        "elapsed_ms": 9.0,
+        "expected_abstain": true,
+        "expected_reason": "EVIDENCE_CONFLICT",
+        "memory_mb_used": 0.001731,
+        "output_hash": "875c46ea24cc7cacdcba1abdf91f2fe39cb61807a286475923b2e48800c3f2e9",
+        "over_abstain": false,
+        "reason_match": true,
+        "score": 1.0,
+        "unsafe_allow": false
+      }
+    ],
+    "suite_id": "review_hallucination_bench_v1"
+  },
+  "ok": true
+}

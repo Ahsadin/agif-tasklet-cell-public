@@ -1,0 +1,24 @@
+{
+  "actual_code": "LIMIT_EXCEEDED",
+  "case_id": "FCB-033",
+  "category": "runtime_limits",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "run",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/cells/finance_doc_extractor_neural_v1.cell",
+    "--input",
+    "{\"__simulate_tool_calls\":999,\"account_context\":{\"cost_center\":\"CC-BENCH\",\"ledger_profile\":\"ap_default\",\"vendor_hint\":\"Fail Closed Vendor\"},\"currency_hint\":\"USD\",\"doc_id\":\"fail-closed-bench\",\"import_event\":\"on_import\",\"locale\":\"en-US\",\"ocr_text\":\"INVOICE FAIL CLOSED BENCH subtotal 100 tax 10 total 110\",\"source_type\":\"invoice\"}"
+  ],
+  "description": "Runtime tool-call limit rejection",
+  "elapsed_ms": 107.32066599302925,
+  "expected_codes": [
+    "LIMIT_EXCEEDED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"LIMIT_EXCEEDED\",\"message\":\"Run rejected by limits: tool calls 999 exceeded max_tool_calls 3\"}}\n",
+  "unsafe_allow": false
+}

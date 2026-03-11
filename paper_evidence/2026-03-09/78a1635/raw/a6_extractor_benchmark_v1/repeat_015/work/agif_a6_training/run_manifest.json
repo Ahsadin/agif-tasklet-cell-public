@@ -1,0 +1,65 @@
+{
+  "artifacts": {
+    "model_stub_hash": "6e8cee2acb70e38f8559950174d456115827e0242e7bc40cbc1026ffb3371f86",
+    "model_stub_path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/a6_extractor_benchmark_v1/repeat_015/work/agif_a6_training/artifacts/model_stub.bin"
+  },
+  "dataset": {
+    "dataset_id": "finance_extractor",
+    "dataset_version": "1.0.0",
+    "manifest_hash": "f840c60065908584b5b7984af1168e7b6266a576f10a60d1f92a2aedda811b61",
+    "manifest_path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/a6_extractor_benchmark_v1/repeat_015/work/agif_a6_snapshot/manifest.json",
+    "record_counts": {
+      "edge": 1,
+      "test": 1,
+      "train": 2,
+      "val": 1
+    }
+  },
+  "finished_at": "2026-03-09T17:19:31Z",
+  "model_config": {
+    "hash": "cbab38b49a5b92c38e0c241add837f29505d4b66fb8d3e3a150ad0c1b064c610",
+    "path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/projects/agif_full_product_v1/04_execution/training_pipeline/model_config_v1.json"
+  },
+  "run_id": "run_2139caf85b8f5276",
+  "started_at": "2026-03-09T17:19:31Z",
+  "status": "completed",
+  "training": {
+    "feature_names": [
+      "has_invoice_token",
+      "has_receipt_token",
+      "has_tax_token",
+      "has_total_token",
+      "ap_context_hint",
+      "expense_context_hint"
+    ],
+    "feature_schema_version": "routing_features_v1",
+    "fit_record_count": 5,
+    "fit_scope": "snapshot_all_splits_bootstrap",
+    "framework": "custom_python_centroid",
+    "labels": [
+      "accounts_payable_invoice",
+      "expense_receipt",
+      "other_finance_doc"
+    ],
+    "seed": 4045,
+    "single_thread": true,
+    "split_metrics": {
+      "edge": {
+        "count": 1,
+        "routing_accuracy": 1.0
+      },
+      "test": {
+        "count": 1,
+        "routing_accuracy": 1.0
+      },
+      "train": {
+        "count": 2,
+        "routing_accuracy": 1.0
+      },
+      "val": {
+        "count": 1,
+        "routing_accuracy": 1.0
+      }
+    }
+  }
+}

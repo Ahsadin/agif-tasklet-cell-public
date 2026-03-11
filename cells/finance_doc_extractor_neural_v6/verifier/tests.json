@@ -1,0 +1,13 @@
+[
+  {
+    "input": {
+      "doc_id": "v6-verifier-001"
+    },
+    "expected_output": {
+      "doc_id": "v6-verifier-001"
+    },
+    "comparison": {
+      "mode": "canonical_json"
+    }
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "artifacts": {
+    "transformer_metadata_hash": "0c202de9a38deebbd5827beef246c6030d62eddf8b59b4fa4d14cb33d72d81e4",
+    "transformer_metadata_path": "cells/finance_doc_extractor_neural_v4/model/transformer_v4_metadata.json",
+    "transformer_onnx_hash": "0c7674e338a2cc8da4fcb3137787f75916059920a0e02730ad4f3a4c79af7a70",
+    "transformer_onnx_path": "cells/finance_doc_extractor_neural_v4/model/transformer_v4.onnx"
+  },
+  "export": {
+    "golden_validation": "pass",
+    "quant_mode": "dynamic_int8",
+    "target_provider": "CPUExecutionProvider"
+  },
+  "export_id": "v4_export_7a19f6857f07e514",
+  "model_config_hash": "34679977b444df83ee1b8034616e02c46e9290478f26900e47eb16d179c92391",
+  "model_config_path": "intelligence/training/v4_model_config.json",
+  "notes": [
+    "v4 ONNX export completed",
+    "10-case golden validation passed"
+  ],
+  "status": "export_completed",
+  "training_run_manifest_hash": "cee8028a48b4c9fefee5fbaac654043a1d3a0e2411ceff173f8ad776c33d4703",
+  "training_run_manifest_path": "not_shipped_in_public_repo"
+}

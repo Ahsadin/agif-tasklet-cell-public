@@ -1,0 +1,924 @@
+{
+  "data": {
+    "case_count": 12,
+    "command": "reasoning_trace_bench",
+    "metrics": {
+      "evidence_alignment_count": 12,
+      "evidence_alignment_rate": 1.0,
+      "latency_ms": {
+        "mean": 0.0280174172075931,
+        "p50": 0.025208501028828323,
+        "p95": 0.044831247214460725,
+        "p99": 0.05896624599699864
+      },
+      "trace_determinism_count": 12,
+      "trace_determinism_rate": 1.0,
+      "trace_schema_valid_count": 12,
+      "trace_schema_valid_rate": 1.0
+    },
+    "rows": [
+      {
+        "case_id": "RTB-001",
+        "description": "Low amount and low risk vendor",
+        "elapsed_ms": 0.06249999569263309,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "approve",
+        "input_payload": {
+          "amount": 120.0,
+          "budget_remaining": 500.0,
+          "currency": "USD",
+          "invoice_age_days": 3,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "approve",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-002",
+        "description": "Budget pressure but otherwise safe",
+        "elapsed_ms": 0.03037499845959246,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "approve",
+        "input_payload": {
+          "amount": 480.0,
+          "budget_remaining": 500.0,
+          "currency": "USD",
+          "invoice_age_days": 5,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "approve",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-003",
+        "description": "Amount exceeds budget",
+        "elapsed_ms": 0.02329199924133718,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "reject",
+        "input_payload": {
+          "amount": 650.0,
+          "budget_remaining": 500.0,
+          "currency": "USD",
+          "invoice_age_days": 1,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.97,
+            "decision": "over_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "reject",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "b573e0dbeb1f6e1e72089d4bb7d32f69554718e7e3007b26ae7ce32954cad34b",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "b573e0dbeb1f6e1e72089d4bb7d32f69554718e7e3007b26ae7ce32954cad34b",
+          "b573e0dbeb1f6e1e72089d4bb7d32f69554718e7e3007b26ae7ce32954cad34b",
+          "b573e0dbeb1f6e1e72089d4bb7d32f69554718e7e3007b26ae7ce32954cad34b"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-004",
+        "description": "Medium risk vendor with stale invoice",
+        "elapsed_ms": 0.028291993658058345,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "manual_review",
+        "input_payload": {
+          "amount": 300.0,
+          "budget_remaining": 1200.0,
+          "currency": "USD",
+          "invoice_age_days": 42,
+          "recurring_vendor": false,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "medium"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.8374999999999999,
+            "decision": "medium_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.83,
+            "decision": "manual_review",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-005",
+        "description": "High risk vendor requires manual control",
+        "elapsed_ms": 0.02662499900907278,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "reject",
+        "input_payload": {
+          "amount": 250.0,
+          "budget_remaining": 1000.0,
+          "currency": "USD",
+          "invoice_age_days": 2,
+          "recurring_vendor": false,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "high"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.9249999999999999,
+            "decision": "high_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "reject",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "0a652e1066aad084c20b638cb71acee40933edcd41cf4f9d174c6e9031cefe9b",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "0a652e1066aad084c20b638cb71acee40933edcd41cf4f9d174c6e9031cefe9b",
+          "0a652e1066aad084c20b638cb71acee40933edcd41cf4f9d174c6e9031cefe9b",
+          "0a652e1066aad084c20b638cb71acee40933edcd41cf4f9d174c6e9031cefe9b"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-006",
+        "description": "Manager review explicitly required",
+        "elapsed_ms": 0.02158300776500255,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "manual_review",
+        "input_payload": {
+          "amount": 180.0,
+          "budget_remaining": 900.0,
+          "currency": "USD",
+          "invoice_age_days": 7,
+          "recurring_vendor": true,
+          "requires_manager_review": true,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "manual_review_required",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.83,
+            "decision": "manual_review",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-007",
+        "description": "Non-USD invoice requires review",
+        "elapsed_ms": 0.02129199856426567,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "manual_review",
+        "input_payload": {
+          "amount": 220.0,
+          "budget_remaining": 1000.0,
+          "currency": "EUR",
+          "invoice_age_days": 6,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "manual_review_required",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.83,
+            "decision": "manual_review",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1",
+          "1ce65d18e2098071246d8b8c0eb3e4ac184d3b25fe2300afeb3892c02508cbb1"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-008",
+        "description": "Aged invoice and non-recurring vendor",
+        "elapsed_ms": 0.024374996428377926,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "manual_review",
+        "input_payload": {
+          "amount": 290.0,
+          "budget_remaining": 900.0,
+          "currency": "USD",
+          "invoice_age_days": 75,
+          "recurring_vendor": false,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "medium"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.875,
+            "decision": "medium_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.83,
+            "decision": "manual_review",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "e131a8a32010f62eb9065d729edc688ec393bdd80809914a5343994f662c2cbd",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "e131a8a32010f62eb9065d729edc688ec393bdd80809914a5343994f662c2cbd",
+          "e131a8a32010f62eb9065d729edc688ec393bdd80809914a5343994f662c2cbd",
+          "e131a8a32010f62eb9065d729edc688ec393bdd80809914a5343994f662c2cbd"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-009",
+        "description": "High amount with medium risk",
+        "elapsed_ms": 0.0221250083995983,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "manual_review",
+        "input_payload": {
+          "amount": 900.0,
+          "budget_remaining": 1500.0,
+          "currency": "USD",
+          "invoice_age_days": 10,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "medium"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.8374999999999999,
+            "decision": "medium_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.83,
+            "decision": "manual_review",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11",
+          "7f9d2bcf9b82a61ea9d96cdeed45563140e7445b91ac7feb5f105f3f7fbbde11"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-010",
+        "description": "High amount + high risk should reject",
+        "elapsed_ms": 0.025291999918408692,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "reject",
+        "input_payload": {
+          "amount": 1300.0,
+          "budget_remaining": 1800.0,
+          "currency": "USD",
+          "invoice_age_days": 4,
+          "recurring_vendor": false,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "high"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.95,
+            "decision": "high_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "reject",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "7d36f4e58bcd6ebb3b2574e05af701d4c125ff311ae46317975175f3202255a7",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "7d36f4e58bcd6ebb3b2574e05af701d4c125ff311ae46317975175f3202255a7",
+          "7d36f4e58bcd6ebb3b2574e05af701d4c125ff311ae46317975175f3202255a7",
+          "7d36f4e58bcd6ebb3b2574e05af701d4c125ff311ae46317975175f3202255a7"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-011",
+        "description": "Very stale invoice should reject",
+        "elapsed_ms": 0.02533300721552223,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "approve",
+        "input_payload": {
+          "amount": 140.0,
+          "budget_remaining": 600.0,
+          "currency": "USD",
+          "invoice_age_days": 121,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.7999999999999999,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "approve",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "aa9f5456859c533ad8dc3c2c52286f2dc2d0557458ec3dc537133971ac3220bd",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "aa9f5456859c533ad8dc3c2c52286f2dc2d0557458ec3dc537133971ac3220bd",
+          "aa9f5456859c533ad8dc3c2c52286f2dc2d0557458ec3dc537133971ac3220bd",
+          "aa9f5456859c533ad8dc3c2c52286f2dc2d0557458ec3dc537133971ac3220bd"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      },
+      {
+        "case_id": "RTB-012",
+        "description": "Healthy recurring invoice path",
+        "elapsed_ms": 0.025125002139247954,
+        "evidence_alignment_errors": [],
+        "evidence_alignment_valid": true,
+        "final_decision": "approve",
+        "input_payload": {
+          "amount": 75.0,
+          "budget_remaining": 300.0,
+          "currency": "USD",
+          "invoice_age_days": 2,
+          "recurring_vendor": true,
+          "requires_manager_review": false,
+          "vendor_risk_tier": "low"
+        },
+        "trace": [
+          {
+            "confidence": 0.99,
+            "decision": "within_budget",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining"
+            ],
+            "method_used": "rule",
+            "step_id": "budget_check"
+          },
+          {
+            "confidence": 0.725,
+            "decision": "low_risk",
+            "evidence_fields": [
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "recurring_vendor",
+              "amount"
+            ],
+            "method_used": "model",
+            "step_id": "risk_assessment"
+          },
+          {
+            "confidence": 0.98,
+            "decision": "policy_clear",
+            "evidence_fields": [
+              "requires_manager_review",
+              "currency"
+            ],
+            "method_used": "rule",
+            "step_id": "policy_gate"
+          },
+          {
+            "confidence": 0.91,
+            "decision": "approve",
+            "evidence_fields": [
+              "amount",
+              "budget_remaining",
+              "vendor_risk_tier",
+              "invoice_age_days",
+              "requires_manager_review",
+              "currency",
+              "recurring_vendor"
+            ],
+            "method_used": "model",
+            "step_id": "final_decision"
+          }
+        ],
+        "trace_canonical_hash": "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+        "trace_deterministic": true,
+        "trace_repeat_hashes": [
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c",
+          "88f8336f749856d9329d24a421687958b164f035e08fae413221dbd15d0eeb8c"
+        ],
+        "trace_schema_errors": [],
+        "trace_schema_valid": true
+      }
+    ],
+    "suite_id": "reasoning_trace_bench_v1"
+  },
+  "ok": true
+}

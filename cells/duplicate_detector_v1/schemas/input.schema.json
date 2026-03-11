@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "doc_id",
+    "vendor_name",
+    "invoice_number",
+    "invoice_date",
+    "grand_total",
+    "currency",
+    "content_hash",
+    "candidate_set",
+    "duplicate_detected",
+    "duplicate_candidates",
+    "match_reason_codes",
+    "status_code"
+  ],
+  "properties": {
+    "doc_id": {
+      "type": "string"
+    },
+    "vendor_name": {
+      "type": "string"
+    },
+    "invoice_number": {
+      "type": "string"
+    },
+    "invoice_date": {
+      "type": "string"
+    },
+    "grand_total": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string"
+    },
+    "candidate_set": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "doc_id",
+          "vendor_name",
+          "invoice_number",
+          "invoice_date",
+          "grand_total",
+          "currency",
+          "content_hash"
+        ],
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          },
+          "vendor_name": {
+            "type": "string"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "invoice_date": {
+            "type": "string"
+          },
+          "grand_total": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "content_hash": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "duplicate_detected": {
+      "type": "boolean"
+    },
+    "duplicate_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "doc_id",
+          "score",
+          "match_level"
+        ],
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "match_level": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "match_reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status_code": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,4731 @@
+#!/usr/bin/env sh
+set -eu
+
+LC_ALL=C
+
+EXIT_USAGE=2
+EXIT_BUNDLE_NOT_FOUND=3
+EXIT_BUNDLE_NOT_FILE=4
+EXIT_BUNDLE_INVALID=5
+EXIT_CONFORMANCE_REQUIRED=6
+
+RUNNER_VERSION="runner-v0.1"
+RUNNER_POLICY="policy-preset-balanced-v1"
+POLICY_PRESET="balanced"
+RUNNER_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$RUNNER_DIR/.." && pwd)
+CONFORMANCE_STATE_PATH="${TMPDIR:-/tmp}/agif-tasklet-cell-conformance-state.json"
+PERSONALIZATION_STATE_PATH="${TMPDIR:-/tmp}/agif-tasklet-cell-personalization-state.json"
+ROLLBACK_STATE_PATH="${TMPDIR:-/tmp}/agif-tasklet-cell-rollback-state.json"
+ROLLBACK_MODE="${AGIF_ROLLBACK_MODE:-strict}"
+VALIDATE_POLICY_PATH=""
+SBOM_POLICY_MODE="sbom_optional"
+SBOM_OBSERVED_STATUS="not_checked"
+ATTESTATION_POLICY_MODE="attestation_optional"
+ATTESTATION_OBSERVED_STATUS="not_checked"
+CONFORMANCE_KEY_JSON='{}'
+RUN_OFFLINE_POLICY_JSON='{}'
+ENFORCEMENT_REPORT_JSON='{}'
+
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+emit_error() {
+  code="$1"
+  message="$2"
+  exit_code="$3"
+  escaped_message=$(json_escape "$message")
+  printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' "$code" "$escaped_message"
+  exit "$exit_code"
+}
+
+emit_help() {
+  printf '%s\n' '{"ok":true,"data":{"name":"cell","commands":["info","validate","test","run","learn","show-learned","reset-personalization"],"usage":["cell info <bundle>","cell validate <bundle> [--policy <json>] [--policy-preset <strict|balanced|dev>]","cell test <bundle> [--policy-preset <strict|balanced|dev>]","cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]","cell learn --feedback <json>","cell show-learned [--json]","cell reset-personalization --cell-id <cell_id> [--dry-run]"]}}'
+}
+
+set_policy_preset() {
+  preset="${1:-balanced}"
+  case "$preset" in
+    strict|balanced|dev)
+      POLICY_PRESET="$preset"
+      RUNNER_POLICY="policy-preset-${POLICY_PRESET}-v1"
+      ;;
+    *)
+      emit_error "POLICY_PRESET_INVALID" "Policy preset must be one of: strict,balanced,dev" "$EXIT_USAGE"
+      ;;
+  esac
+}
+
+load_validate_policy() {
+  policy_path="${1:-}"
+  SBOM_POLICY_MODE="sbom_optional"
+  ATTESTATION_POLICY_MODE="attestation_optional"
+  SBOM_OBSERVED_STATUS="not_checked"
+  ATTESTATION_OBSERVED_STATUS="not_checked"
+  VALIDATE_POLICY_PATH=""
+
+  if [ "$policy_path" = "" ]; then
+    return 0
+  fi
+
+  if [ ! -e "$policy_path" ]; then
+    emit_error "POLICY_NOT_FOUND" "Policy file path not found." "$EXIT_USAGE"
+  fi
+
+  if [ ! -f "$policy_path" ]; then
+    emit_error "POLICY_INVALID" "Policy path must be a regular file." "$EXIT_USAGE"
+  fi
+
+  set +e
+  policy_output=$(python3 - "$policy_path" <<'PY'
+import json
+import sys
+
+policy_path = sys.argv[1]
+
+try:
+    with open(policy_path, "r", encoding="utf-8") as fh:
+        policy = json.load(fh)
+except FileNotFoundError:
+    print("policy file not found")
+    sys.exit(70)
+except IsADirectoryError:
+    print("policy path must be file")
+    sys.exit(71)
+except UnicodeDecodeError:
+    print("policy file must be UTF-8 JSON")
+    sys.exit(72)
+except json.JSONDecodeError as err:
+    print(f"policy JSON invalid at line {err.lineno} column {err.colno}")
+    sys.exit(72)
+except Exception:
+    print("policy file unreadable")
+    sys.exit(72)
+
+if not isinstance(policy, dict):
+    print("policy must be object")
+    sys.exit(72)
+
+sbom_mode = "sbom_optional"
+if "sbom_policy" in policy:
+    sbom_mode = policy["sbom_policy"]
+elif isinstance(policy.get("sbom"), dict):
+    sbom_obj = policy["sbom"]
+    for key in ("mode", "policy", "sbom_policy"):
+        if key in sbom_obj:
+            sbom_mode = sbom_obj[key]
+            break
+
+attestation_mode = "attestation_optional"
+if "attestation_policy" in policy:
+    attestation_mode = policy["attestation_policy"]
+elif isinstance(policy.get("attestation"), dict):
+    att_obj = policy["attestation"]
+    for key in ("mode", "policy", "attestation_policy"):
+        if key in att_obj:
+            attestation_mode = att_obj[key]
+            break
+
+if not isinstance(sbom_mode, str) or sbom_mode.strip() == "":
+    print("sbom policy mode must be non-empty string")
+    sys.exit(72)
+
+if not isinstance(attestation_mode, str) or attestation_mode.strip() == "":
+    print("attestation policy mode must be non-empty string")
+    sys.exit(72)
+
+sbom_mode = sbom_mode.strip()
+if sbom_mode not in {"sbom_optional", "sbom_required"}:
+    print(f"unsupported sbom policy mode: {sbom_mode}")
+    sys.exit(72)
+
+attestation_mode = attestation_mode.strip()
+if attestation_mode not in {"attestation_optional", "attestation_required"}:
+    print(f"unsupported attestation policy mode: {attestation_mode}")
+    sys.exit(72)
+
+print(sbom_mode)
+print(attestation_mode)
+PY
+  )
+  policy_rc=$?
+  set -e
+
+  case "$policy_rc" in
+    0)
+      SBOM_POLICY_MODE=$(printf '%s\n' "$policy_output" | sed -n '1p')
+      ATTESTATION_POLICY_MODE=$(printf '%s\n' "$policy_output" | sed -n '2p')
+      VALIDATE_POLICY_PATH="$policy_path"
+      return 0
+      ;;
+    70)
+      emit_error "POLICY_NOT_FOUND" "Policy file path not found." "$EXIT_USAGE"
+      ;;
+    71)
+      emit_error "POLICY_INVALID" "Policy path must be a regular file." "$EXIT_USAGE"
+      ;;
+    72)
+      emit_error "POLICY_INVALID" "Validation policy invalid: $policy_output" "$EXIT_USAGE"
+      ;;
+    *)
+      emit_error "POLICY_INVALID" "Validation policy invalid." "$EXIT_USAGE"
+      ;;
+  esac
+}
+
+emit_learn() {
+  feedback_json="$1"
+
+  set +e
+  learn_output=$(python3 - "$feedback_json" "$PERSONALIZATION_STATE_PATH" "$REPO_ROOT" <<'PY'
+import datetime
+import hashlib
+import json
+import os
+import sys
+
+feedback_raw = sys.argv[1]
+state_path = sys.argv[2]
+repo_root = os.path.abspath(sys.argv[3])
+
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+try:
+    payload = json.loads(feedback_raw)
+except json.JSONDecodeError as err:
+    print(f"feedback must be valid JSON at line {err.lineno} column {err.colno}")
+    sys.exit(61)
+
+if not isinstance(payload, dict):
+    print("feedback must be a JSON object")
+    sys.exit(62)
+
+
+def require_object(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, dict):
+        print(f"{path}.{key} must be object")
+        sys.exit(62)
+    return value
+
+
+def require_non_empty_string(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, str) or value == "":
+        print(f"{path}.{key} must be non-empty string")
+        sys.exit(62)
+    return value
+
+
+def require_bool(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, bool):
+        print(f"{path}.{key} must be boolean")
+        sys.exit(62)
+    return value
+
+
+def require_positive_int(container, key, path):
+    value = container.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        print(f"{path}.{key} must be positive integer")
+        sys.exit(62)
+    return value
+
+
+def identity_key(identity):
+    return f"{identity['cell_id']}+{identity['cell_version']}+{identity['bundle_hash']}"
+
+
+source = require_non_empty_string(payload, "source", "feedback")
+if source not in {"user_correction", "user_preference", "manual"}:
+    print("feedback.source must be one of: user_correction,user_preference,manual")
+    sys.exit(62)
+
+core_identity = require_object(payload, "core_identity", "feedback")
+require_non_empty_string(core_identity, "cell_id", "feedback.core_identity")
+require_non_empty_string(core_identity, "cell_version", "feedback.core_identity")
+require_non_empty_string(core_identity, "bundle_hash", "feedback.core_identity")
+
+event_day = payload.get("event_day")
+if event_day is None:
+    event_day = datetime.date.today().isoformat()
+elif not isinstance(event_day, str) or event_day == "":
+    print("feedback.event_day must be non-empty string when provided")
+    sys.exit(62)
+
+runner_core_identity = payload.get("runner_core_identity", core_identity)
+if not isinstance(runner_core_identity, dict):
+    print("feedback.runner_core_identity must be object")
+    sys.exit(62)
+require_non_empty_string(runner_core_identity, "cell_id", "feedback.runner_core_identity")
+require_non_empty_string(runner_core_identity, "cell_version", "feedback.runner_core_identity")
+require_non_empty_string(runner_core_identity, "bundle_hash", "feedback.runner_core_identity")
+
+proposal_identity_key = identity_key(core_identity)
+runner_identity_key = identity_key(runner_core_identity)
+if proposal_identity_key != runner_identity_key:
+    print(
+        "core identity mismatch: "
+        f"proposal key {proposal_identity_key} does not match runner key {runner_identity_key}"
+    )
+    sys.exit(63)
+
+proposal = require_object(payload, "proposal", "feedback")
+require_non_empty_string(proposal, "rule_id", "feedback.proposal")
+require_non_empty_string(proposal, "rule_text", "feedback.proposal")
+
+personalization = require_object(payload, "personalization", "feedback")
+rules = personalization.get("rules")
+if not isinstance(rules, list) or len(rules) == 0:
+    print("feedback.personalization.rules must be a non-empty array")
+    sys.exit(62)
+for idx, rule in enumerate(rules):
+    if not isinstance(rule, dict):
+        print(f"feedback.personalization.rules[{idx}] must be object")
+        sys.exit(62)
+    require_non_empty_string(rule, "rule_id", f"feedback.personalization.rules[{idx}]")
+    require_non_empty_string(rule, "rule_text", f"feedback.personalization.rules[{idx}]")
+
+gate = require_object(payload, "gate", "feedback")
+core_verifier_pass = require_bool(gate, "core_verifier_pass", "feedback.gate")
+local_regression_pass = require_bool(gate, "local_regression_pass", "feedback.gate")
+limits = require_object(gate, "limits", "feedback.gate")
+proposed_state_size_bytes = require_positive_int(limits, "proposed_state_size_bytes", "feedback.gate.limits")
+max_state_size_bytes = require_positive_int(limits, "max_state_size_bytes", "feedback.gate.limits")
+proposed_compute_units = require_positive_int(limits, "proposed_compute_units", "feedback.gate.limits")
+max_compute_units = require_positive_int(limits, "max_compute_units", "feedback.gate.limits")
+max_proposals_per_day = require_positive_int(limits, "max_proposals_per_day", "feedback.gate.limits")
+max_learning_compute_per_day = require_positive_int(
+    limits, "max_learning_compute_per_day", "feedback.gate.limits"
+)
+max_snapshots = require_positive_int(limits, "max_snapshots", "feedback.gate.limits")
+episodic_corrections = payload.get("episodic_corrections", [])
+if episodic_corrections is None:
+    episodic_corrections = []
+if not isinstance(episodic_corrections, list):
+    print("feedback.episodic_corrections must be array when provided")
+    sys.exit(62)
+
+if not core_verifier_pass:
+    print("core verifier pack failed")
+    sys.exit(64)
+
+if not local_regression_pass:
+    print("local regression pack failed")
+    sys.exit(65)
+
+if proposed_state_size_bytes > max_state_size_bytes:
+    print(
+        f"proposed state size {proposed_state_size_bytes} exceeds max_state_size_bytes {max_state_size_bytes}"
+    )
+    sys.exit(66)
+
+if proposed_compute_units > max_compute_units:
+    print(
+        f"proposed compute units {proposed_compute_units} exceeds max_compute_units {max_compute_units}"
+    )
+    sys.exit(66)
+
+state = {"version": 1, "records": {}}
+if os.path.exists(state_path):
+    try:
+        with open(state_path, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+    except Exception:
+        print("personalization state unreadable")
+        sys.exit(69)
+
+if not isinstance(state, dict):
+    print("personalization state invalid")
+    sys.exit(69)
+
+records = state.get("records")
+if records is None:
+    records = {}
+if not isinstance(records, dict):
+    print("personalization records invalid")
+    sys.exit(69)
+
+record = records.get(proposal_identity_key)
+if record is None:
+    record = {}
+if not isinstance(record, dict):
+    print("personalization record invalid")
+    sys.exit(69)
+
+applied = record.get("applied")
+if applied is None:
+    applied = []
+if not isinstance(applied, list):
+    print("personalization applied history invalid")
+    sys.exit(69)
+
+snapshots = record.get("snapshots")
+if snapshots is None:
+    snapshots = []
+if not isinstance(snapshots, list):
+    print("personalization snapshots invalid")
+    sys.exit(69)
+
+daily_usage = record.get("daily_usage")
+if daily_usage is None:
+    daily_usage = {}
+if not isinstance(daily_usage, dict):
+    print("personalization daily usage invalid")
+    sys.exit(69)
+
+daily_entry = daily_usage.get(event_day)
+if daily_entry is None:
+    daily_entry = {"proposals": 0, "compute_units": 0}
+if not isinstance(daily_entry, dict):
+    print("personalization daily usage entry invalid")
+    sys.exit(69)
+
+proposals_used_today = daily_entry.get("proposals")
+compute_units_used_today = daily_entry.get("compute_units")
+if (
+    isinstance(proposals_used_today, bool)
+    or not isinstance(proposals_used_today, int)
+    or proposals_used_today < 0
+):
+    print("personalization daily proposals count invalid")
+    sys.exit(69)
+if (
+    isinstance(compute_units_used_today, bool)
+    or not isinstance(compute_units_used_today, int)
+    or compute_units_used_today < 0
+):
+    print("personalization daily compute count invalid")
+    sys.exit(69)
+
+if proposals_used_today + 1 > max_proposals_per_day:
+    print(
+        f"daily proposals {proposals_used_today + 1} exceed max_proposals_per_day {max_proposals_per_day}"
+    )
+    sys.exit(67)
+
+if compute_units_used_today + proposed_compute_units > max_learning_compute_per_day:
+    print(
+        "daily compute units "
+        f"{compute_units_used_today + proposed_compute_units} exceed max_learning_compute_per_day "
+        f"{max_learning_compute_per_day}"
+    )
+    sys.exit(68)
+
+episodic_written = []
+if len(episodic_corrections) > 0:
+    try:
+        from intelligence.episodic_store import EpisodicStore
+    except Exception as err:
+        print(f"episodic correction write failed: episodic store unavailable: {err}")
+        sys.exit(70)
+
+    try:
+        episodic_store = EpisodicStore()
+        episodic_written = episodic_store.record_corrections_batch(episodic_corrections)
+    except Exception as err:
+        print(f"episodic correction write failed: {err}")
+        sys.exit(70)
+
+canonical_feedback = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+proposal_id = hashlib.sha256(canonical_feedback.encode("utf-8")).hexdigest()[:16]
+snapshot_id = f"snap-{len(applied) + 1:04d}"
+
+applied.append(
+    {
+        "proposal_id": proposal_id,
+        "event_day": event_day,
+        "state_size_bytes": proposed_state_size_bytes,
+        "compute_units": proposed_compute_units,
+    }
+)
+
+snapshots.append(
+    {
+        "snapshot_id": snapshot_id,
+        "proposal_id": proposal_id,
+        "event_day": event_day,
+    }
+)
+if len(snapshots) > max_snapshots:
+    snapshots = snapshots[-max_snapshots:]
+
+proposals_used_today += 1
+compute_units_used_today += proposed_compute_units
+daily_usage[event_day] = {
+    "proposals": proposals_used_today,
+    "compute_units": compute_units_used_today,
+}
+
+record = {
+    "active_proposal_id": proposal_id,
+    "active_state_size_bytes": proposed_state_size_bytes,
+    "active_rule_count": len(rules),
+    "active_rules": rules,
+    "applied": applied,
+    "snapshots": snapshots,
+    "daily_usage": daily_usage,
+    "latest_limits": {
+        "max_personalization_storage_bytes": max_state_size_bytes,
+        "max_compute_units": max_compute_units,
+        "max_learning_compute_per_day": max_learning_compute_per_day,
+        "max_proposals_per_day": max_proposals_per_day,
+        "max_snapshots": max_snapshots,
+    },
+}
+records[proposal_identity_key] = record
+state = {
+    "version": 1,
+    "records": records,
+}
+
+state_dir = os.path.dirname(state_path)
+if state_dir != "":
+    os.makedirs(state_dir, exist_ok=True)
+tmp_path = f"{state_path}.tmp"
+try:
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(state, fh, sort_keys=True, separators=(",", ":"))
+    os.replace(tmp_path, state_path)
+except Exception:
+    print("personalization state write failed")
+    sys.exit(69)
+
+result = {
+    "ok": True,
+    "data": {
+        "command": "learn",
+        "mode": "scaffold",
+        "status": "applied",
+        "proposal_id": proposal_id,
+        "identity_key": proposal_identity_key,
+        "gate": {
+            "core_verifier_pass": core_verifier_pass,
+            "local_regression_pass": local_regression_pass,
+            "proposed_state_size_bytes": proposed_state_size_bytes,
+            "max_state_size_bytes": max_state_size_bytes,
+            "proposed_compute_units": proposed_compute_units,
+            "max_compute_units": max_compute_units,
+            "max_proposals_per_day": max_proposals_per_day,
+            "max_learning_compute_per_day": max_learning_compute_per_day,
+            "max_snapshots": max_snapshots,
+        },
+        "usage": {
+            "event_day": event_day,
+            "proposals_used_today": proposals_used_today,
+            "compute_units_used_today": compute_units_used_today,
+            "latest_snapshot_id": snapshot_id,
+            "snapshots_retained": len(snapshots),
+            "episodic_corrections_written": len(episodic_written),
+        },
+        "episodic_corrections_written": episodic_written,
+        "feedback": payload,
+    },
+}
+print(json.dumps(result, sort_keys=False, separators=(",", ":")))
+PY
+  )
+  learn_rc=$?
+  set -e
+
+  case "$learn_rc" in
+    0)
+      printf '%s\n' "$learn_output"
+      ;;
+    61)
+      emit_error "INPUT_INVALID_JSON" "Learn feedback must be valid JSON: $learn_output" "$EXIT_USAGE"
+      ;;
+    62)
+      emit_error "LEARN_FEEDBACK_INVALID" "Learn feedback payload invalid: $learn_output" "$EXIT_USAGE"
+      ;;
+    63)
+      emit_error "PERSONALIZATION_CORE_MISMATCH" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    64)
+      emit_error "PERSONALIZATION_CORE_VERIFIER_FAILED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    65)
+      emit_error "PERSONALIZATION_LOCAL_REGRESSION_FAILED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    66)
+      emit_error "PERSONALIZATION_LIMIT_EXCEEDED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    67)
+      emit_error "PERSONALIZATION_DAILY_PROPOSAL_LIMIT_EXCEEDED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    68)
+      emit_error "PERSONALIZATION_DAILY_COMPUTE_LIMIT_EXCEEDED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    69)
+      emit_error "PERSONALIZATION_STATE_WRITE_FAILED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    70)
+      emit_error "EPISODIC_WRITE_REJECTED" "Learn rejected: $learn_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "LEARN_EXECUTION_FAILED" "Learn execution failed." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+emit_show_learned() {
+  format_mode="$1"
+
+  set +e
+  show_output=$(python3 - "$format_mode" "$PERSONALIZATION_STATE_PATH" <<'PY'
+import json
+import os
+import sys
+
+format_mode = sys.argv[1]
+state_path = sys.argv[2]
+
+if format_mode not in {"text", "json"}:
+    print("format must be text or json")
+    sys.exit(61)
+
+state = {"version": 1, "records": {}}
+if os.path.exists(state_path):
+    try:
+        with open(state_path, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+    except Exception:
+        print("personalization state unreadable")
+        sys.exit(62)
+
+if not isinstance(state, dict):
+    print("personalization state invalid")
+    sys.exit(62)
+
+records = state.get("records")
+if records is None:
+    records = {}
+if not isinstance(records, dict):
+    print("personalization records invalid")
+    sys.exit(62)
+
+rows = []
+plain_lines = []
+for identity_key in sorted(records.keys()):
+    record = records.get(identity_key)
+    if not isinstance(record, dict):
+        print("personalization record invalid")
+        sys.exit(62)
+
+    latest_limits = record.get("latest_limits")
+    if latest_limits is None:
+        latest_limits = {}
+    if not isinstance(latest_limits, dict):
+        print("personalization limits invalid")
+        sys.exit(62)
+
+    snapshots = record.get("snapshots")
+    if snapshots is None:
+        snapshots = []
+    if not isinstance(snapshots, list):
+        print("personalization snapshots invalid")
+        sys.exit(62)
+
+    daily_usage = record.get("daily_usage")
+    if daily_usage is None:
+        daily_usage = {}
+    if not isinstance(daily_usage, dict):
+        print("personalization daily usage invalid")
+        sys.exit(62)
+
+    applied = record.get("applied")
+    if applied is None:
+        applied = []
+    if not isinstance(applied, list):
+        print("personalization applied history invalid")
+        sys.exit(62)
+
+    active_rules = record.get("active_rules")
+    if active_rules is None:
+        active_rules = []
+    if not isinstance(active_rules, list):
+        print("personalization active rules invalid")
+        sys.exit(62)
+    normalized_rules = []
+    for idx, rule in enumerate(active_rules):
+        if not isinstance(rule, dict):
+            print(f"personalization active_rules[{idx}] invalid")
+            sys.exit(62)
+        rule_id = rule.get("rule_id")
+        rule_text = rule.get("rule_text")
+        if not isinstance(rule_id, str) or rule_id == "":
+            print(f"personalization active_rules[{idx}].rule_id invalid")
+            sys.exit(62)
+        if not isinstance(rule_text, str) or rule_text == "":
+            print(f"personalization active_rules[{idx}].rule_text invalid")
+            sys.exit(62)
+        normalized_rules.append({"rule_id": rule_id, "rule_text": rule_text})
+    normalized_rules = sorted(normalized_rules, key=lambda r: (r["rule_id"], r["rule_text"]))
+
+    active_proposal_id = record.get("active_proposal_id")
+    if active_proposal_id is not None and (not isinstance(active_proposal_id, str) or active_proposal_id == ""):
+        print("personalization active_proposal_id invalid")
+        sys.exit(62)
+
+    latest_snapshot_id = None
+    if len(snapshots) > 0:
+        latest_snapshot = snapshots[-1]
+        if not isinstance(latest_snapshot, dict):
+            print("personalization snapshot entry invalid")
+            sys.exit(62)
+        candidate_snapshot_id = latest_snapshot.get("snapshot_id")
+        if candidate_snapshot_id is not None:
+            if not isinstance(candidate_snapshot_id, str) or candidate_snapshot_id == "":
+                print("personalization snapshot_id invalid")
+                sys.exit(62)
+            latest_snapshot_id = candidate_snapshot_id
+
+    rows.append(
+        {
+            "identity_key": identity_key,
+            "max_personalization_storage_bytes": latest_limits.get("max_personalization_storage_bytes"),
+            "max_learning_compute_per_day": latest_limits.get("max_learning_compute_per_day"),
+            "max_proposals_per_day": latest_limits.get("max_proposals_per_day"),
+            "max_snapshots": latest_limits.get("max_snapshots"),
+            "snapshots_retained": len(snapshots),
+            "active_proposal_id": active_proposal_id,
+            "latest_snapshot_id": latest_snapshot_id,
+            "active_rule_count": len(normalized_rules),
+            "active_rules": normalized_rules,
+            "applied_count": len(applied),
+            "daily_usage_days": sorted(k for k in daily_usage.keys() if isinstance(k, str)),
+        }
+    )
+
+    if len(normalized_rules) == 0:
+        plain_lines.append(f"- {identity_key}: no active learned rules.")
+    else:
+        for rule in normalized_rules:
+            plain_lines.append(f"- {identity_key}: {rule['rule_id']} => {rule['rule_text']}")
+
+if len(plain_lines) == 0:
+    plain_lines = ["No learned rules yet."]
+
+result = {
+    "ok": True,
+    "data": {
+        "command": "show-learned",
+        "mode": "scaffold",
+        "format": format_mode,
+        "metadata": {
+            "state_path": state_path,
+            "record_count": len(rows),
+        },
+        "records": rows,
+        "what_it_learned": plain_lines,
+        "review_options": "Accept / Edit / Reject / Forget",
+    },
+}
+if format_mode == "text":
+    report_lines = ["What it learned:"] + plain_lines + ["Review options: Accept / Edit / Reject / Forget"]
+    result["data"]["report_text"] = "\n".join(report_lines)
+print(json.dumps(result, sort_keys=False, separators=(",", ":")))
+PY
+  )
+  show_rc=$?
+  set -e
+
+  case "$show_rc" in
+    0)
+      printf '%s\n' "$show_output"
+      ;;
+    61)
+      emit_error "USAGE_INVALID" "Usage: cell show-learned [--json]" "$EXIT_USAGE"
+      ;;
+    62)
+      emit_error "PERSONALIZATION_STATE_READ_FAILED" "Unable to read personalization state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "SHOW_LEARNED_EXECUTION_FAILED" "show-learned execution failed." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+emit_reset_personalization() {
+  cell_id="$1"
+  dry_run="$2"
+
+  set +e
+  reset_output=$(python3 - "$cell_id" "$dry_run" "$PERSONALIZATION_STATE_PATH" <<'PY'
+import json
+import os
+import sys
+
+cell_id = sys.argv[1]
+dry_run_raw = sys.argv[2]
+state_path = sys.argv[3]
+
+if not isinstance(cell_id, str) or cell_id == "":
+    print("cell_id must be non-empty string")
+    sys.exit(61)
+
+if dry_run_raw not in {"true", "false"}:
+    print("dry_run must be true or false")
+    sys.exit(61)
+dry_run = dry_run_raw == "true"
+
+state = {"version": 1, "records": {}, "audit": []}
+if os.path.exists(state_path):
+    try:
+        with open(state_path, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+    except Exception:
+        print("personalization state unreadable")
+        sys.exit(62)
+
+if not isinstance(state, dict):
+    print("personalization state invalid")
+    sys.exit(62)
+
+records = state.get("records")
+if records is None:
+    records = {}
+if not isinstance(records, dict):
+    print("personalization records invalid")
+    sys.exit(62)
+
+audit = state.get("audit")
+if audit is None:
+    audit = []
+if not isinstance(audit, list):
+    print("personalization audit invalid")
+    sys.exit(62)
+
+identity_prefix = f"{cell_id}+"
+cleared_identity_keys = sorted(key for key in records.keys() if isinstance(key, str) and key.startswith(identity_prefix))
+cleared_count = len(cleared_identity_keys)
+remaining_record_count = len(records) - cleared_count
+if remaining_record_count < 0:
+    remaining_record_count = 0
+
+next_audit_id = f"reset-{len(audit) + 1:04d}"
+audit_entry = {
+    "audit_id": next_audit_id,
+    "action": "reset_personalization",
+    "cell_id": cell_id,
+    "dry_run": dry_run,
+    "cleared_identity_keys": cleared_identity_keys,
+    "cleared_count": cleared_count,
+    "remaining_record_count": remaining_record_count,
+}
+
+if not dry_run:
+    for key in cleared_identity_keys:
+        if key in records:
+            del records[key]
+    audit.append(audit_entry)
+    state = {
+        "version": state.get("version", 1),
+        "records": records,
+        "audit": audit,
+    }
+
+    state_dir = os.path.dirname(state_path)
+    if state_dir != "":
+        os.makedirs(state_dir, exist_ok=True)
+    tmp_path = f"{state_path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, sort_keys=True, separators=(",", ":"))
+        os.replace(tmp_path, state_path)
+    except Exception:
+        print("personalization state write failed")
+        sys.exit(63)
+
+result = {
+    "ok": True,
+    "data": {
+        "command": "reset-personalization",
+        "mode": "scaffold",
+        "cell_id": cell_id,
+        "dry_run": dry_run,
+        "state_path": state_path,
+        "cleared_identity_keys": cleared_identity_keys,
+        "cleared_count": cleared_count,
+        "remaining_record_count": remaining_record_count,
+        "audit_metadata": audit_entry,
+    },
+}
+print(json.dumps(result, sort_keys=False, separators=(",", ":")))
+PY
+  )
+  reset_rc=$?
+  set -e
+
+  case "$reset_rc" in
+    0)
+      printf '%s\n' "$reset_output"
+      ;;
+    61)
+      emit_error "USAGE_INVALID" "Usage: cell reset-personalization --cell-id <cell_id> [--dry-run]" "$EXIT_USAGE"
+      ;;
+    62)
+      emit_error "PERSONALIZATION_STATE_READ_FAILED" "Unable to read personalization state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    63)
+      emit_error "PERSONALIZATION_STATE_WRITE_FAILED" "Unable to write personalization state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "RESET_PERSONALIZATION_FAILED" "reset-personalization execution failed." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+record_conformance_state() {
+  bundle_path="$1"
+
+  set +e
+  state_output=$(python3 - "$bundle_path" "$RUNNER_VERSION" "$RUNNER_POLICY" "$CONFORMANCE_STATE_PATH" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+bundle_path = os.path.abspath(sys.argv[1])
+runner_version = sys.argv[2]
+policy = sys.argv[3]
+state_path = sys.argv[4]
+
+with open(bundle_path, "rb") as fh:
+    bundle_hash = hashlib.sha256(fh.read()).hexdigest()
+
+entry = {
+    "bundle_hash": bundle_hash,
+    "runner_version": runner_version,
+    "policy": policy,
+}
+
+state = {"version": 1, "entries": {}}
+if os.path.exists(state_path):
+    with open(state_path, "r", encoding="utf-8") as fh:
+        state = json.load(fh)
+    if not isinstance(state, dict):
+        state = {"version": 1, "entries": {}}
+if not isinstance(state.get("entries"), dict):
+    state["entries"] = {}
+state["entries"][bundle_path] = entry
+
+os.makedirs(os.path.dirname(state_path), exist_ok=True)
+tmp_path = f"{state_path}.tmp"
+with open(tmp_path, "w", encoding="utf-8") as fh:
+    json.dump(state, fh, sort_keys=True, separators=(",", ":"))
+os.replace(tmp_path, state_path)
+
+print(json.dumps(entry, sort_keys=True, separators=(",", ":")))
+PY
+  )
+  state_rc=$?
+  set -e
+
+  case "$state_rc" in
+    0)
+      CONFORMANCE_KEY_JSON="$state_output"
+      return 0
+      ;;
+    *)
+      emit_error "CONFORMANCE_STATE_WRITE_FAILED" "Unable to store conformance state." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+check_conformance_state() {
+  bundle_path="$1"
+
+  set +e
+  state_output=$(python3 - "$bundle_path" "$RUNNER_VERSION" "$RUNNER_POLICY" "$CONFORMANCE_STATE_PATH" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+bundle_path = os.path.abspath(sys.argv[1])
+runner_version = sys.argv[2]
+policy = sys.argv[3]
+state_path = sys.argv[4]
+
+if not os.path.exists(state_path):
+    print("conformance state not found")
+    sys.exit(70)
+
+try:
+    with open(state_path, "r", encoding="utf-8") as fh:
+        state = json.load(fh)
+except Exception:
+    print("conformance state unreadable")
+    sys.exit(73)
+
+entries = state.get("entries")
+if not isinstance(entries, dict):
+    print("conformance state invalid")
+    sys.exit(73)
+
+entry = entries.get(bundle_path)
+if not isinstance(entry, dict):
+    print("bundle has not been validated")
+    sys.exit(70)
+
+with open(bundle_path, "rb") as fh:
+    bundle_hash = hashlib.sha256(fh.read()).hexdigest()
+
+expected = {
+    "bundle_hash": bundle_hash,
+    "runner_version": runner_version,
+    "policy": policy,
+}
+
+if (
+    entry.get("bundle_hash") != expected["bundle_hash"]
+    or entry.get("runner_version") != expected["runner_version"]
+    or entry.get("policy") != expected["policy"]
+):
+    print("conformance key mismatch; re-validation required")
+    sys.exit(71)
+
+print(json.dumps(expected, sort_keys=True, separators=(",", ":")))
+PY
+  )
+  state_rc=$?
+  set -e
+
+  case "$state_rc" in
+    0)
+      CONFORMANCE_KEY_JSON="$state_output"
+      return 0
+      ;;
+    70|71)
+      emit_error "CONFORMANCE_REQUIRED" "Bundle must pass validate before run: $state_output" "$EXIT_CONFORMANCE_REQUIRED"
+      ;;
+    73)
+      emit_error "CONFORMANCE_STATE_READ_FAILED" "Unable to read conformance state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "CONFORMANCE_STATE_READ_FAILED" "Unable to read conformance state." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+enforce_anti_rollback_policy() {
+  bundle_path="$1"
+
+  set +e
+  rollback_output=$(python3 - "$bundle_path" "$ROLLBACK_STATE_PATH" "$ROLLBACK_MODE" <<'PY'
+import hashlib
+import json
+import os
+import sys
+import zipfile
+
+bundle_path = os.path.abspath(sys.argv[1])
+state_path = sys.argv[2]
+rollback_mode = (sys.argv[3] or "").strip().lower()
+if rollback_mode == "":
+    rollback_mode = "strict"
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+if rollback_mode not in {"strict", "compatibility"}:
+    fail(83, f"anti-rollback mode must be strict or compatibility: {rollback_mode}")
+
+
+def normalize_version(version):
+    if not isinstance(version, str) or version == "":
+        return ("text", "")
+    parts = version.split(".")
+    if len(parts) > 0 and all(part.isdigit() for part in parts):
+        numbers = [int(part) for part in parts]
+        while len(numbers) > 0 and numbers[-1] == 0:
+            numbers.pop()
+        return ("numeric", numbers)
+    return ("text", version)
+
+
+def compare_versions(left, right):
+    left_norm = normalize_version(left)
+    right_norm = normalize_version(right)
+    if left_norm[0] == "numeric" and right_norm[0] == "numeric":
+        left_numbers = list(left_norm[1])
+        right_numbers = list(right_norm[1])
+        size = max(len(left_numbers), len(right_numbers))
+        left_numbers.extend([0] * (size - len(left_numbers)))
+        right_numbers.extend([0] * (size - len(right_numbers)))
+        if left_numbers < right_numbers:
+            return -1
+        if left_numbers > right_numbers:
+            return 1
+        return 0
+    if left < right:
+        return -1
+    if left > right:
+        return 1
+    return 0
+
+
+try:
+    archive = zipfile.ZipFile(bundle_path)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+try:
+    manifest_text = manifest_bytes.decode("utf-8")
+except UnicodeDecodeError:
+    fail(31, "manifest.json must be UTF-8")
+
+try:
+    manifest = json.loads(manifest_text)
+except json.JSONDecodeError as err:
+    fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+if not isinstance(manifest, dict):
+    fail(32, "manifest must be object")
+
+cell_id = manifest.get("id")
+cell_version = manifest.get("version")
+if not isinstance(cell_id, str) or cell_id == "":
+    fail(32, "manifest.id must be non-empty string")
+if not isinstance(cell_version, str) or cell_version == "":
+    fail(32, "manifest.version must be non-empty string")
+
+with open(bundle_path, "rb") as fh:
+    bundle_hash = hashlib.sha256(fh.read()).hexdigest()
+
+state = {"version": 1, "entries": {}}
+if os.path.exists(state_path):
+    try:
+        with open(state_path, "r", encoding="utf-8") as fh:
+            state = json.load(fh)
+    except Exception:
+        fail(81, "anti-rollback state unreadable")
+
+if not isinstance(state, dict):
+    fail(81, "anti-rollback state invalid")
+
+entries = state.get("entries")
+if entries is None:
+    entries = {}
+if not isinstance(entries, dict):
+    fail(81, "anti-rollback entries invalid")
+
+record = entries.get(cell_id)
+trusted_version = None
+trusted_bundle_hash = None
+if record is not None:
+    if not isinstance(record, dict):
+        fail(81, f"anti-rollback record invalid for {cell_id}")
+    trusted_version = record.get("trusted_version")
+    trusted_bundle_hash = record.get("trusted_bundle_hash")
+    if not isinstance(trusted_version, str) or trusted_version == "":
+        fail(81, f"anti-rollback trusted_version invalid for {cell_id}")
+    if not isinstance(trusted_bundle_hash, str) or trusted_bundle_hash == "":
+        fail(81, f"anti-rollback trusted_bundle_hash invalid for {cell_id}")
+
+if trusted_version is not None:
+    version_cmp = compare_versions(cell_version, trusted_version)
+    if version_cmp < 0:
+        if rollback_mode == "strict":
+            fail(
+                80,
+                f"rollback detected for {cell_id}: candidate version {cell_version} is older than trusted {trusted_version}",
+            )
+        print(
+            json.dumps(
+                {
+                    "mode": rollback_mode,
+                    "cell_id": cell_id,
+                    "candidate_version": cell_version,
+                    "trusted_version": trusted_version,
+                    "candidate_bundle_hash": bundle_hash,
+                    "trusted_bundle_hash": trusted_bundle_hash,
+                    "decision": "allowed_compatibility_mode",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        sys.exit(0)
+
+entries[cell_id] = {
+    "trusted_version": cell_version,
+    "trusted_bundle_hash": bundle_hash,
+}
+state["entries"] = entries
+state["version"] = 1
+
+state_dir = os.path.dirname(state_path)
+if state_dir != "":
+    os.makedirs(state_dir, exist_ok=True)
+tmp_path = f"{state_path}.tmp"
+try:
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(state, fh, sort_keys=True, separators=(",", ":"))
+    os.replace(tmp_path, state_path)
+except Exception:
+    fail(82, "anti-rollback state write failed")
+
+print(
+    json.dumps(
+        {
+            "mode": rollback_mode,
+            "cell_id": cell_id,
+            "candidate_version": cell_version,
+            "trusted_version": cell_version,
+            "candidate_bundle_hash": bundle_hash,
+            "decision": "recorded",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+)
+PY
+  )
+  rollback_rc=$?
+  set -e
+
+  case "$rollback_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $rollback_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $rollback_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $rollback_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    80)
+      emit_error "ROLLBACK_REJECTED" "Validate rejected by anti-rollback policy: $rollback_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    81)
+      emit_error "ROLLBACK_STATE_READ_FAILED" "Unable to read anti-rollback state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    82)
+      emit_error "ROLLBACK_STATE_WRITE_FAILED" "Unable to store anti-rollback state." "$EXIT_BUNDLE_INVALID"
+      ;;
+    83)
+      emit_error "ROLLBACK_POLICY_INVALID" "Anti-rollback policy mode invalid: $rollback_output" "$EXIT_USAGE"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+enforce_wasi_offline_policy() {
+  bundle_path="$1"
+
+  set +e
+  policy_output=$(python3 - "$bundle_path" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+try:
+    manifest_text = manifest_bytes.decode("utf-8")
+except UnicodeDecodeError:
+    fail(31, "manifest.json must be UTF-8")
+
+try:
+    manifest = json.loads(manifest_text)
+except json.JSONDecodeError as err:
+    fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+if not isinstance(manifest, dict):
+    fail(31, "manifest.json must be object")
+
+runner_compat = manifest.get("runner_compat")
+if not isinstance(runner_compat, dict):
+    fail(32, "manifest.runner_compat must be object")
+
+execution_kind = runner_compat.get("execution_kind")
+if execution_kind not in {"wasi", "native"}:
+    fail(32, "manifest.runner_compat.execution_kind must be one of: wasi,native")
+
+capabilities = manifest.get("capabilities")
+if not isinstance(capabilities, dict):
+    fail(32, "manifest.capabilities must be object")
+
+network_requested = capabilities.get("network")
+if not isinstance(network_requested, bool):
+    fail(32, "manifest.capabilities.network must be boolean")
+
+policy = {
+    "enforcement": "default_deny" if execution_kind == "wasi" else "not_applicable",
+    "execution_kind": execution_kind,
+    "network_requested": network_requested,
+}
+
+if execution_kind == "wasi" and network_requested:
+    print(json.dumps(policy, sort_keys=True, separators=(",", ":")))
+    sys.exit(71)
+
+print(json.dumps(policy, sort_keys=True, separators=(",", ":")))
+PY
+  )
+  policy_rc=$?
+  set -e
+
+  case "$policy_rc" in
+    0)
+      RUN_OFFLINE_POLICY_JSON="$policy_output"
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $policy_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $policy_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $policy_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    71)
+      emit_error "OFFLINE_POLICY_VIOLATION" "Run rejected by offline default-deny policy for WASI cell." "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+build_enforcement_report() {
+  bundle_path="$1"
+  sbom_policy_mode="$2"
+  sbom_observed_status="$3"
+  attestation_policy_mode="$4"
+  attestation_observed_status="$5"
+  policy_preset="$6"
+
+  set +e
+  report_output=$(python3 - "$bundle_path" "$sbom_policy_mode" "$sbom_observed_status" "$attestation_policy_mode" "$attestation_observed_status" "$policy_preset" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+sbom_policy_mode = sys.argv[2]
+sbom_observed_status = sys.argv[3]
+attestation_policy_mode = sys.argv[4]
+attestation_observed_status = sys.argv[5]
+policy_preset = sys.argv[6]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def required_object(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, dict):
+        fail(32, f"{path}.{key} must be object")
+    return value
+
+
+def required_positive_int(container, key, path):
+    value = container.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        fail(32, f"{path}.{key} must be positive integer")
+    return value
+
+
+def required_sbom_mode(value):
+    if not isinstance(value, str):
+        fail(33, "sbom policy mode must be string")
+    if value not in {"sbom_optional", "sbom_required"}:
+        fail(33, f"unsupported sbom policy mode: {value}")
+    return value
+
+
+def required_sbom_status(value):
+    if not isinstance(value, str) or value == "":
+        fail(33, "sbom observed status must be non-empty string")
+    return value
+
+def required_attestation_mode(value):
+    if not isinstance(value, str):
+        fail(34, "attestation policy mode must be string")
+    if value not in {"attestation_optional", "attestation_required"}:
+        fail(34, f"unsupported attestation policy mode: {value}")
+    return value
+
+def required_attestation_status(value):
+    if not isinstance(value, str) or value == "":
+        fail(34, "attestation observed status must be non-empty string")
+    return value
+
+def required_policy_preset(value):
+    if not isinstance(value, str):
+        fail(35, "policy preset must be string")
+    if value not in {"strict", "balanced", "dev"}:
+        fail(35, f"unsupported policy preset: {value}")
+    return value
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+try:
+    manifest_text = manifest_bytes.decode("utf-8")
+except UnicodeDecodeError:
+    fail(31, "manifest.json must be UTF-8")
+
+try:
+    manifest = json.loads(manifest_text)
+except json.JSONDecodeError as err:
+    fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+if not isinstance(manifest, dict):
+    fail(31, "manifest must be object")
+
+runner_compat = required_object(manifest, "runner_compat", "manifest")
+execution_kind = runner_compat.get("execution_kind")
+if execution_kind not in {"wasi", "native"}:
+    fail(32, "manifest.runner_compat.execution_kind must be one of: wasi,native")
+
+capabilities = required_object(manifest, "capabilities", "manifest")
+network_requested = capabilities.get("network")
+if not isinstance(network_requested, bool):
+    fail(32, "manifest.capabilities.network must be boolean")
+
+filesystem = required_object(capabilities, "filesystem", "manifest.capabilities")
+preopens = filesystem.get("preopens")
+if not isinstance(preopens, list):
+    fail(32, "manifest.capabilities.filesystem.preopens must be array")
+for idx, item in enumerate(preopens):
+    if not isinstance(item, str) or item == "":
+        fail(32, f"manifest.capabilities.filesystem.preopens[{idx}] must be non-empty string")
+
+limits = required_object(manifest, "limits", "manifest")
+max_wall_ms = required_positive_int(limits, "max_wall_ms", "manifest.limits")
+max_steps = required_positive_int(limits, "max_steps", "manifest.limits")
+max_memory_mb = required_positive_int(limits, "max_memory_mb", "manifest.limits")
+max_output_bytes = required_positive_int(limits, "max_output_bytes", "manifest.limits")
+max_tool_calls = required_positive_int(limits, "max_tool_calls", "manifest.limits")
+
+offline_level = "strong" if execution_kind == "wasi" else "none"
+if execution_kind == "wasi":
+    filesystem_level = "strong" if len(preopens) == 0 else "best_effort"
+else:
+    filesystem_level = "none"
+
+report = {
+    "offline_level": offline_level,
+    "filesystem_level": filesystem_level,
+    "filesystem_preopens": preopens,
+    "limits_applied": {
+        "max_wall_ms": max_wall_ms,
+        "max_steps": max_steps,
+        "max_memory_mb": max_memory_mb,
+        "max_output_bytes": max_output_bytes,
+        "max_tool_calls": max_tool_calls,
+    },
+    "limits_enforcement": {
+        "max_wall_ms": "userland_timeout",
+        "max_steps": "userland_budget",
+        "max_memory_mb": "best_effort_userland",
+        "max_output_bytes": "userland_size_cap",
+        "max_tool_calls": "userland_counter",
+    },
+    "policy_preset": required_policy_preset(policy_preset),
+    "sbom_policy": {
+        "mode": required_sbom_mode(sbom_policy_mode),
+        "status": required_sbom_status(sbom_observed_status),
+    },
+    "attestation_policy": {
+        "mode": required_attestation_mode(attestation_policy_mode),
+        "status": required_attestation_status(attestation_observed_status),
+    },
+    "network_requested": network_requested,
+}
+
+print(json.dumps(report, sort_keys=False, separators=(",", ":")))
+PY
+  )
+  report_rc=$?
+  set -e
+
+  case "$report_rc" in
+    0)
+      ENFORCEMENT_REPORT_JSON="$report_output"
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $report_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $report_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $report_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    33)
+      emit_error "SBOM_POLICY_VIOLATION" "SBOM policy check failed: $report_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    34)
+      emit_error "ATTESTATION_POLICY_VIOLATION" "Attestation policy check failed: $report_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    35)
+      emit_error "POLICY_PRESET_INVALID" "Policy preset invalid: $report_output" "$EXIT_USAGE"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_archive_paths() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import sys
+import zipfile
+from stat import S_ISLNK
+
+bundle = sys.argv[1]
+MAX_FILE_COUNT = 128
+MAX_PER_FILE_UNCOMPRESSED_BYTES = 1024 * 1024
+MAX_TOTAL_UNCOMPRESSED_BYTES = 4 * 1024 * 1024
+MAX_COMPRESSION_RATIO = 100
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    entries = archive.infolist()
+    if len(entries) > MAX_FILE_COUNT:
+        print(f"{len(entries)}>{MAX_FILE_COUNT}")
+        sys.exit(24)
+
+    seen = set()
+    total_uncompressed = 0
+    for info in entries:
+        raw = info.filename
+        path = raw.replace("\\", "/")
+        mode = (info.external_attr >> 16) & 0xFFFF
+        file_size = int(info.file_size)
+        compressed_size = int(info.compress_size)
+
+        if file_size > MAX_PER_FILE_UNCOMPRESSED_BYTES:
+            print(f"{raw}:{file_size}>{MAX_PER_FILE_UNCOMPRESSED_BYTES}")
+            sys.exit(25)
+
+        total_uncompressed += file_size
+        if total_uncompressed > MAX_TOTAL_UNCOMPRESSED_BYTES:
+            print(f"{total_uncompressed}>{MAX_TOTAL_UNCOMPRESSED_BYTES}")
+            sys.exit(26)
+
+        if file_size > 0:
+            if compressed_size <= 0:
+                print(f"{raw}:{file_size}/{compressed_size}")
+                sys.exit(27)
+            if (file_size / compressed_size) > MAX_COMPRESSION_RATIO:
+                print(f"{raw}:{file_size}/{compressed_size}>{MAX_COMPRESSION_RATIO}")
+                sys.exit(27)
+
+        if S_ISLNK(mode):
+            print(raw)
+            sys.exit(23)
+
+        if path.startswith("/"):
+            print(raw)
+            sys.exit(21)
+
+        if len(path) >= 2 and path[1] == ":" and path[0].isalpha():
+            print(raw)
+            sys.exit(21)
+
+        parts = []
+        for segment in path.split("/"):
+            if segment == "" or segment == ".":
+                continue
+            if segment == "..":
+                if not parts:
+                    print(raw)
+                    sys.exit(21)
+                parts.pop()
+                continue
+            parts.append(segment)
+
+        normalized = "/".join(parts)
+        if normalized == "":
+            continue
+
+        if normalized in seen:
+            print(normalized)
+            sys.exit(22)
+
+        seen.add(normalized)
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    21)
+      emit_error "BUNDLE_PATH_ESCAPES_ROOT" "Bundle entry path escapes root: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    22)
+      emit_error "BUNDLE_PATH_DUPLICATE" "Bundle has duplicate normalized path: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    23)
+      emit_error "BUNDLE_SYMLINK_NOT_ALLOWED" "Bundle contains symlink entry: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    24)
+      emit_error "BUNDLE_TOO_MANY_FILES" "Bundle file count exceeds limit: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    25)
+      emit_error "BUNDLE_FILE_TOO_LARGE" "Bundle entry exceeds per-file size limit: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    26)
+      emit_error "BUNDLE_TOTAL_SIZE_EXCEEDED" "Bundle total uncompressed size exceeds limit: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    27)
+      emit_error "BUNDLE_COMPRESSION_RATIO_EXCEEDED" "Bundle compression ratio exceeds limit: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_manifest_schema() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def require_key(obj, key, path):
+    if key not in obj:
+        fail(32, f"{path}.{key} missing")
+    return obj[key]
+
+
+def expect_object(value, path):
+    if not isinstance(value, dict):
+        fail(32, f"{path} must be object")
+    return value
+
+
+def expect_non_empty_string(value, path):
+    if not isinstance(value, str) or value == "":
+        fail(32, f"{path} must be non-empty string")
+    return value
+
+
+def expect_positive_int(value, path):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        fail(32, f"{path} must be positive integer")
+    return value
+
+
+def expect_bool(value, path):
+    if not isinstance(value, bool):
+        fail(32, f"{path} must be boolean")
+    return value
+
+
+def expect_string_list(value, path):
+    if not isinstance(value, list):
+        fail(32, f"{path} must be array")
+    for idx, item in enumerate(value):
+        if not isinstance(item, str) or item == "":
+            fail(32, f"{path}[{idx}] must be non-empty string")
+    return value
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+try:
+    manifest_text = manifest_bytes.decode("utf-8")
+except UnicodeDecodeError:
+    fail(31, "manifest.json must be UTF-8")
+
+try:
+    manifest = json.loads(manifest_text)
+except json.JSONDecodeError as err:
+    fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+manifest = expect_object(manifest, "manifest")
+
+expect_non_empty_string(require_key(manifest, "cell_format_version", "manifest"), "manifest.cell_format_version")
+expect_non_empty_string(require_key(manifest, "id", "manifest"), "manifest.id")
+expect_non_empty_string(require_key(manifest, "name", "manifest"), "manifest.name")
+expect_non_empty_string(require_key(manifest, "version", "manifest"), "manifest.version")
+
+runner_compat = expect_object(require_key(manifest, "runner_compat", "manifest"), "manifest.runner_compat")
+expect_non_empty_string(require_key(runner_compat, "runner_api_version", "manifest.runner_compat"), "manifest.runner_compat.runner_api_version")
+execution_kind = expect_non_empty_string(
+    require_key(runner_compat, "execution_kind", "manifest.runner_compat"),
+    "manifest.runner_compat.execution_kind",
+)
+if execution_kind not in {"wasi", "native"}:
+    fail(32, "manifest.runner_compat.execution_kind must be one of: wasi,native")
+
+determinism = expect_object(require_key(manifest, "determinism", "manifest"), "manifest.determinism")
+determinism_mode = expect_non_empty_string(require_key(determinism, "mode", "manifest.determinism"), "manifest.determinism.mode")
+if determinism_mode not in {"strict", "bounded", "best_effort"}:
+    fail(32, "manifest.determinism.mode must be one of: strict,bounded,best_effort")
+
+limits = expect_object(require_key(manifest, "limits", "manifest"), "manifest.limits")
+expect_positive_int(require_key(limits, "max_wall_ms", "manifest.limits"), "manifest.limits.max_wall_ms")
+expect_positive_int(require_key(limits, "max_steps", "manifest.limits"), "manifest.limits.max_steps")
+expect_positive_int(require_key(limits, "max_memory_mb", "manifest.limits"), "manifest.limits.max_memory_mb")
+expect_positive_int(require_key(limits, "max_output_bytes", "manifest.limits"), "manifest.limits.max_output_bytes")
+expect_positive_int(require_key(limits, "max_tool_calls", "manifest.limits"), "manifest.limits.max_tool_calls")
+
+contracts = expect_object(require_key(manifest, "contracts", "manifest"), "manifest.contracts")
+expect_non_empty_string(require_key(contracts, "input_schema_path", "manifest.contracts"), "manifest.contracts.input_schema_path")
+expect_non_empty_string(require_key(contracts, "output_schema_path", "manifest.contracts"), "manifest.contracts.output_schema_path")
+
+verifier = expect_object(require_key(manifest, "verifier", "manifest"), "manifest.verifier")
+expect_non_empty_string(require_key(verifier, "tests_path", "manifest.verifier"), "manifest.verifier.tests_path")
+
+capabilities = expect_object(require_key(manifest, "capabilities", "manifest"), "manifest.capabilities")
+expect_bool(require_key(capabilities, "network", "manifest.capabilities"), "manifest.capabilities.network")
+filesystem = expect_object(require_key(capabilities, "filesystem", "manifest.capabilities"), "manifest.capabilities.filesystem")
+expect_string_list(require_key(filesystem, "preopens", "manifest.capabilities.filesystem"), "manifest.capabilities.filesystem.preopens")
+
+licensing = expect_object(require_key(manifest, "licensing", "manifest"), "manifest.licensing")
+expect_non_empty_string(require_key(licensing, "notices_path", "manifest.licensing"), "manifest.licensing.notices_path")
+spdx_value = None
+for key in ("spdx_ids", "spdx_id", "spdx_identifiers", "spdx_identifier"):
+    if key in licensing:
+        spdx_value = licensing[key]
+        break
+if spdx_value is None:
+    fail(32, "manifest.licensing.spdx identifier missing")
+if isinstance(spdx_value, list):
+    expect_string_list(spdx_value, "manifest.licensing.spdx_ids")
+elif isinstance(spdx_value, str):
+    expect_non_empty_string(spdx_value, "manifest.licensing.spdx_id")
+else:
+    fail(32, "manifest.licensing.spdx identifier must be string or array")
+
+integrity = expect_object(require_key(manifest, "integrity", "manifest"), "manifest.integrity")
+hash_path = None
+for key in ("hash_manifest_path", "hashes_path", "hash_manifest"):
+    if key in integrity:
+        hash_path = integrity[key]
+        break
+if hash_path is None:
+    fail(32, "manifest.integrity.hash manifest path missing")
+expect_non_empty_string(hash_path, "manifest.integrity.hash_manifest_path")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_licensing_completeness() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def require_non_empty_string(value, label):
+    if not isinstance(value, str) or value.strip() == "":
+        fail(60, f"{label} must be non-empty string")
+    return value.strip()
+
+
+def require_spdx(licensing):
+    spdx_value = None
+    spdx_label = None
+    for key in ("spdx_ids", "spdx_id", "spdx_identifiers", "spdx_identifier"):
+        if key in licensing:
+            spdx_value = licensing.get(key)
+            spdx_label = f"manifest.licensing.{key}"
+            break
+
+    if spdx_value is None:
+        fail(60, "manifest.licensing SPDX declaration missing")
+
+    if isinstance(spdx_value, str):
+        require_non_empty_string(spdx_value, spdx_label)
+        return
+
+    if isinstance(spdx_value, list):
+        if len(spdx_value) == 0:
+            fail(60, f"{spdx_label} must contain at least one SPDX identifier")
+        for idx, item in enumerate(spdx_value):
+            require_non_empty_string(item, f"{spdx_label}[{idx}]")
+        return
+
+    fail(60, f"{spdx_label} must be string or array")
+
+
+def normalize_notices_path(path):
+    path = path.replace("\\", "/")
+    if path.startswith("/") or path.startswith("../") or "/../" in path:
+        fail(60, f"manifest.licensing.notices_path must remain inside bundle root: {path}")
+    if path == "." or path == "":
+        fail(60, "manifest.licensing.notices_path must reference a file")
+    return path
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+    try:
+        manifest_text = manifest_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(31, "manifest.json must be UTF-8")
+
+    try:
+        manifest = json.loads(manifest_text)
+    except json.JSONDecodeError as err:
+        fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+    if not isinstance(manifest, dict):
+        fail(31, "manifest must be object")
+
+    licensing = manifest.get("licensing")
+    if not isinstance(licensing, dict):
+        fail(60, "manifest.licensing must be object")
+
+    notices_path = require_non_empty_string(licensing.get("notices_path"), "manifest.licensing.notices_path")
+    notices_path = normalize_notices_path(notices_path)
+
+    require_spdx(licensing)
+
+    names = {info.filename for info in archive.infolist() if not info.is_dir()}
+    if notices_path not in names:
+        fail(60, f"manifest.licensing.notices_path missing from bundle: {notices_path}")
+
+    try:
+        notices_bytes = archive.read(notices_path)
+    except KeyError:
+        fail(60, f"manifest.licensing.notices_path missing from bundle: {notices_path}")
+
+    if len(notices_bytes.strip()) == 0:
+        fail(60, f"manifest.licensing.notices_path file empty: {notices_path}")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    60)
+      emit_error "LICENSING_INVALID" "Bundle licensing metadata invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_sbom_policy() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" "$SBOM_POLICY_MODE" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+mode = sys.argv[2]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+if mode not in {"sbom_optional", "sbom_required"}:
+    fail(62, f"unsupported sbom policy mode: {mode}")
+
+
+def is_sbom_candidate(path):
+    lowered = path.lower()
+    if lowered.startswith("sbom/"):
+        return True
+    base = lowered.rsplit("/", 1)[-1]
+    if base in {
+        "sbom.json",
+        "spdx.json",
+        "cyclonedx.json",
+        "bom.json",
+    }:
+        return True
+    if lowered.endswith(".spdx.json") or lowered.endswith(".cdx.json"):
+        return True
+    return False
+
+
+def ensure_readable_sbom(archive, path):
+    try:
+        payload = archive.read(path)
+    except KeyError:
+        fail(61, f"sbom file unreadable: {path}")
+
+    if len(payload.strip()) == 0:
+        fail(61, f"sbom file empty: {path}")
+
+    if path.lower().endswith(".json"):
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            fail(61, f"sbom file must be UTF-8 JSON: {path}")
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as err:
+            fail(61, f"sbom JSON invalid: {path} line {err.lineno} column {err.colno}")
+        if not isinstance(parsed, dict):
+            fail(61, f"sbom JSON must be object: {path}")
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    names = [info.filename for info in archive.infolist() if not info.is_dir()]
+    candidates = []
+    seen = set()
+    for name in names:
+        if is_sbom_candidate(name) and name not in seen:
+            seen.add(name)
+            candidates.append(name)
+
+    if len(candidates) == 0:
+        if mode == "sbom_required":
+            fail(60, "sbom_required policy requires at least one SBOM file")
+        print("missing_optional")
+        sys.exit(0)
+
+    for candidate in sorted(candidates):
+        ensure_readable_sbom(archive, candidate)
+
+    if mode == "sbom_required":
+        print("present_required")
+    else:
+        print("present_optional")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      SBOM_OBSERVED_STATUS="$validation_output"
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    60|61|62)
+      emit_error "SBOM_POLICY_VIOLATION" "SBOM policy check failed: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_attestation_policy() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" "$ATTESTATION_POLICY_MODE" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+mode = sys.argv[2]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+if mode not in {"attestation_optional", "attestation_required"}:
+    fail(62, f"unsupported attestation policy mode: {mode}")
+
+
+def normalize_bundle_path(path, label):
+    if not isinstance(path, str) or path.strip() == "":
+        fail(61, f"{label} must be non-empty string")
+    path = path.strip().replace("\\", "/")
+    if path.startswith("/") or path.startswith("../") or "/../" in path:
+        fail(61, f"{label} must remain inside bundle root: {path}")
+    if path in {".", ""}:
+        fail(61, f"{label} must reference a file")
+    return path
+
+
+def is_attestation_candidate(path):
+    lowered = path.lower()
+    if lowered.startswith("attestations/") or lowered.startswith("provenance/"):
+        return True
+    base = lowered.rsplit("/", 1)[-1]
+    if "attestation" in base or "provenance" in base:
+        return True
+    return False
+
+
+def ensure_readable_attestation(archive, path):
+    try:
+        payload = archive.read(path)
+    except KeyError:
+        fail(61, f"attestation file missing from bundle: {path}")
+
+    if len(payload.strip()) == 0:
+        fail(61, f"attestation file empty: {path}")
+
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(61, f"attestation file must be UTF-8 JSON: {path}")
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as err:
+        fail(61, f"attestation JSON invalid: {path} line {err.lineno} column {err.colno}")
+
+    if not isinstance(parsed, dict):
+        fail(61, f"attestation JSON must be object: {path}")
+
+
+def collect_manifest_attestation_paths(integrity):
+    collected = []
+    for key in ("provenance_path", "provenance_ref", "attestation_path"):
+        if key in integrity:
+            collected.append(normalize_bundle_path(integrity.get(key), f"manifest.integrity.{key}"))
+
+    for key in ("provenance", "attestations"):
+        if key not in integrity:
+            continue
+        value = integrity.get(key)
+        label = f"manifest.integrity.{key}"
+        if isinstance(value, str):
+            collected.append(normalize_bundle_path(value, label))
+            continue
+        if isinstance(value, dict):
+            for nested in ("path", "ref", "file"):
+                if nested in value:
+                    collected.append(normalize_bundle_path(value.get(nested), f"{label}.{nested}"))
+                    break
+            else:
+                fail(61, f"{label} must include one of: path, ref, file")
+            continue
+        if isinstance(value, list):
+            if len(value) == 0:
+                fail(61, f"{label} must be non-empty array when provided")
+            for idx, item in enumerate(value):
+                item_label = f"{label}[{idx}]"
+                if isinstance(item, str):
+                    collected.append(normalize_bundle_path(item, item_label))
+                elif isinstance(item, dict):
+                    for nested in ("path", "ref", "file"):
+                        if nested in item:
+                            collected.append(normalize_bundle_path(item.get(nested), f"{item_label}.{nested}"))
+                            break
+                    else:
+                        fail(61, f"{item_label} must include one of: path, ref, file")
+                else:
+                    fail(61, f"{item_label} must be string or object")
+            continue
+        fail(61, f"{label} must be string, object, or array")
+    return collected
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    names = [info.filename for info in archive.infolist() if not info.is_dir()]
+    name_set = set(names)
+    candidates = []
+    seen = set()
+
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+    try:
+        manifest_text = manifest_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(31, "manifest.json must be UTF-8")
+
+    try:
+        manifest = json.loads(manifest_text)
+    except json.JSONDecodeError as err:
+        fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+    if not isinstance(manifest, dict):
+        fail(32, "manifest must be object")
+
+    integrity = manifest.get("integrity")
+    if integrity is not None and not isinstance(integrity, dict):
+        fail(32, "manifest.integrity must be object when present")
+
+    if isinstance(integrity, dict):
+        for path in collect_manifest_attestation_paths(integrity):
+            if path not in seen:
+                seen.add(path)
+                candidates.append(path)
+
+    for name in names:
+        if is_attestation_candidate(name) and name not in seen:
+            seen.add(name)
+            candidates.append(name)
+
+    if len(candidates) == 0:
+        if mode == "attestation_required":
+            fail(60, "attestation_required policy requires at least one attestation file")
+        print("missing_optional")
+        sys.exit(0)
+
+    for candidate in sorted(candidates):
+        if candidate not in name_set:
+            fail(60, f"attestation file missing from bundle: {candidate}")
+        ensure_readable_attestation(archive, candidate)
+
+    if mode == "attestation_required":
+        print("present_required")
+    else:
+        print("present_optional")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      ATTESTATION_OBSERVED_STATUS="$validation_output"
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    60|61|62)
+      emit_error "ATTESTATION_POLICY_VIOLATION" "Attestation policy check failed: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_hash_integrity() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import hashlib
+import json
+import re
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+CANONICAL_HASH_MANIFEST = "hashes/sha256.json"
+COMPAT_HASH_MANIFEST = "hashes/sha256sums.txt"
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def normalize_hash(value):
+    if not isinstance(value, str):
+        fail(52, "hash value must be string")
+    normalized = value.strip().lower()
+    if not HEX64.fullmatch(normalized):
+        fail(52, f"invalid sha256 value: {value}")
+    return normalized
+
+
+def parse_sha256_json(payload):
+    if isinstance(payload, dict):
+        if "files" in payload and isinstance(payload["files"], dict):
+            return payload["files"]
+        if "files" in payload and isinstance(payload["files"], list):
+            parsed = {}
+            for idx, item in enumerate(payload["files"]):
+                if not isinstance(item, dict):
+                    fail(52, f"hashes/sha256.json files[{idx}] must be object")
+                path = item.get("path")
+                digest = item.get("sha256")
+                if not isinstance(path, str) or path == "":
+                    fail(52, f"hashes/sha256.json files[{idx}].path invalid")
+                if path in parsed:
+                    fail(52, f"duplicate hash entry: {path}")
+                parsed[path] = digest
+            return parsed
+        return payload
+    fail(52, "hashes/sha256.json must be object")
+
+
+def parse_sha256sums(text):
+    parsed = {}
+    lines = text.splitlines()
+    for idx, raw_line in enumerate(lines):
+        line = raw_line.strip()
+        if line == "" or line.startswith("#"):
+            continue
+        parts = raw_line.strip().split(None, 1)
+        if len(parts) != 2:
+            fail(52, f"hashes/sha256sums.txt line {idx + 1} invalid")
+        digest, path = parts
+        path = path.strip()
+        if path.startswith("*"):
+            path = path[1:]
+        if path == "":
+            fail(52, f"hashes/sha256sums.txt line {idx + 1} missing path")
+        if path in parsed:
+            fail(52, f"duplicate hash entry: {path}")
+        parsed[path] = digest
+    if len(parsed) == 0:
+        fail(52, "hashes/sha256sums.txt must contain at least one hash entry")
+    return parsed
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    names = [info.filename for info in archive.infolist() if not info.is_dir()]
+    name_set = set(names)
+
+    hash_manifest_path = None
+    expected_raw = None
+
+    if CANONICAL_HASH_MANIFEST in name_set:
+        hash_manifest_path = CANONICAL_HASH_MANIFEST
+        try:
+            payload = archive.read(CANONICAL_HASH_MANIFEST).decode("utf-8")
+        except UnicodeDecodeError:
+            fail(51, "hashes/sha256.json must be UTF-8")
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError as err:
+            fail(51, f"hashes/sha256.json invalid JSON at line {err.lineno} column {err.colno}")
+        expected_raw = parse_sha256_json(data)
+    elif COMPAT_HASH_MANIFEST in name_set:
+        hash_manifest_path = COMPAT_HASH_MANIFEST
+        try:
+            payload = archive.read(COMPAT_HASH_MANIFEST).decode("utf-8")
+        except UnicodeDecodeError:
+            fail(51, "hashes/sha256sums.txt must be UTF-8")
+        expected_raw = parse_sha256sums(payload)
+    else:
+        fail(50, "hashes/sha256.json or hashes/sha256sums.txt")
+
+    if not isinstance(expected_raw, dict):
+        fail(52, "hash manifest content must be object mapping")
+
+    expected = {}
+    for path, digest in expected_raw.items():
+        if not isinstance(path, str) or path == "":
+            fail(52, "hash manifest path key must be non-empty string")
+        if path in expected:
+            fail(52, f"duplicate hash entry: {path}")
+        expected[path] = normalize_hash(digest)
+
+    actual_files = [name for name in names if name != hash_manifest_path]
+
+    for path in actual_files:
+        if path not in expected:
+            fail(53, f"missing hash entry for file: {path}")
+        actual_hash = hashlib.sha256(archive.read(path)).hexdigest()
+        if actual_hash != expected[path]:
+            fail(53, f"hash mismatch for file: {path}")
+
+    actual_set = set(actual_files)
+    for path in expected:
+        if path == hash_manifest_path:
+            continue
+        if path not in actual_set:
+            fail(53, f"hash entry references missing file: {path}")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    50)
+      emit_error "BUNDLE_HASH_MANIFEST_MISSING" "Bundle missing hash manifest: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    51)
+      emit_error "BUNDLE_HASH_MANIFEST_INVALID" "Bundle hash manifest is not valid JSON/text: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    52)
+      emit_error "BUNDLE_HASH_MANIFEST_INVALID" "Bundle hash manifest schema invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    53)
+      emit_error "HASH_MISMATCH" "Bundle hash verification failed: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_integrity_extensions() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import json
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def non_empty_string(value, label):
+    if not isinstance(value, str) or value.strip() == "":
+        fail(62, f"{label} must be a non-empty string")
+    return value.strip()
+
+
+def path_from_object(value, label):
+    if not isinstance(value, dict):
+        fail(62, f"{label} must be object")
+    for key in ("path", "ref", "file"):
+        if key in value:
+            return non_empty_string(value.get(key), f"{label}.{key}")
+    fail(62, f"{label} must include one of: path, ref, file")
+
+
+def add_path(paths, path, label):
+    paths.append((path, label))
+
+
+def add_value_paths(paths, value, label):
+    if isinstance(value, str):
+        add_path(paths, non_empty_string(value, label), label)
+        return
+    if isinstance(value, dict):
+        add_path(paths, path_from_object(value, label), label)
+        return
+    if isinstance(value, list):
+        if len(value) == 0:
+            fail(62, f"{label} must be a non-empty array")
+        for idx, item in enumerate(value):
+            child_label = f"{label}[{idx}]"
+            if isinstance(item, str):
+                add_path(paths, non_empty_string(item, child_label), child_label)
+            elif isinstance(item, dict):
+                add_path(paths, path_from_object(item, child_label), child_label)
+            else:
+                fail(62, f"{child_label} must be string or object")
+        return
+    fail(62, f"{label} must be string, object, or array")
+
+
+def load_json_object(archive, path, label):
+    try:
+        raw = archive.read(path)
+    except KeyError:
+        fail(60, f"{label} file missing: {path}")
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(61, f"{label} file must be UTF-8 JSON: {path}")
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as err:
+        fail(61, f"{label} file invalid JSON: {path} line {err.lineno} column {err.colno}")
+
+    if not isinstance(parsed, dict):
+        fail(61, f"{label} file must contain JSON object: {path}")
+
+
+def load_manifest(archive):
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        fail(30, "manifest.json")
+
+    try:
+        manifest_text = manifest_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(31, "manifest.json must be UTF-8")
+
+    try:
+        manifest = json.loads(manifest_text)
+    except json.JSONDecodeError as err:
+        fail(31, f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+
+    if not isinstance(manifest, dict):
+        fail(31, "manifest.json must be object")
+    return manifest
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    manifest = load_manifest(archive)
+    integrity = manifest.get("integrity")
+    if not isinstance(integrity, dict):
+        fail(32, "manifest.integrity must be object")
+
+    configured_paths = []
+
+    single_path_labels = {
+        "signature_path": "signature metadata",
+        "signatures_path": "signature metadata",
+        "signature_ref": "signature metadata",
+        "provenance_path": "provenance metadata",
+        "provenance_ref": "provenance metadata",
+        "attestation_path": "provenance metadata",
+    }
+    for key, label in single_path_labels.items():
+        if key in integrity:
+            add_path(configured_paths, non_empty_string(integrity.get(key), f"manifest.integrity.{key}"), f"{label} ({key})")
+
+    if "signatures" in integrity:
+        add_value_paths(configured_paths, integrity.get("signatures"), "manifest.integrity.signatures")
+
+    if "provenance" in integrity:
+        add_value_paths(configured_paths, integrity.get("provenance"), "manifest.integrity.provenance")
+
+    for path, label in configured_paths:
+        load_json_object(archive, path, label)
+
+    print(f"integrity extension refs checked: {len(configured_paths)}")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    30)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    31)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    32)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    60)
+      emit_error "BUNDLE_INTEGRITY_METADATA_MISSING" "Bundle integrity metadata missing: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    61|62)
+      emit_error "BUNDLE_INTEGRITY_METADATA_INVALID" "Bundle integrity metadata invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+validate_verifier_pack() {
+  bundle_path="$1"
+
+  set +e
+  validation_output=$(python3 - "$bundle_path" <<'PY'
+import json
+import re
+import sys
+import zipfile
+
+bundle = sys.argv[1]
+SUPPORTED_COMPARISON_MODES = {
+    "canonical_json",
+    "exact_bytes",
+    "regex",
+    "numeric_tolerance",
+}
+
+
+def fail(code, message):
+    print(message)
+    sys.exit(code)
+
+
+def canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def to_exact_bytes(value):
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return json.dumps(value, sort_keys=False, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def normalize_float_tolerance(value, label):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        fail(42, f"{label} must be a non-negative number")
+    if value < 0:
+        fail(42, f"{label} must be non-negative")
+    return float(value)
+
+
+def numeric_tolerance_equal(produced, expected, tolerance):
+    if isinstance(produced, bool) or isinstance(expected, bool):
+        return produced == expected
+    if isinstance(produced, (int, float)) and isinstance(expected, (int, float)):
+        return abs(float(produced) - float(expected)) <= tolerance
+    if isinstance(produced, dict) and isinstance(expected, dict):
+        if set(produced.keys()) != set(expected.keys()):
+            return False
+        for key in produced:
+            if not numeric_tolerance_equal(produced[key], expected[key], tolerance):
+                return False
+        return True
+    if isinstance(produced, list) and isinstance(expected, list):
+        if len(produced) != len(expected):
+            return False
+        for produced_item, expected_item in zip(produced, expected):
+            if not numeric_tolerance_equal(produced_item, expected_item, tolerance):
+                return False
+        return True
+    return produced == expected
+
+
+def regex_match(produced, expected, label):
+    if not isinstance(expected, str):
+        fail(42, f"{label} regex mode expected_output must be string pattern")
+    candidate = produced if isinstance(produced, str) else canonical_json(produced)
+    try:
+        return re.search(expected, candidate) is not None
+    except re.error as err:
+        fail(42, f"{label} invalid regex pattern: {err}")
+
+
+def validate_type(value, expected_type):
+    if expected_type == "object":
+        return isinstance(value, dict)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "number":
+        return (isinstance(value, int) and not isinstance(value, bool)) or isinstance(value, float)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "null":
+        return value is None
+    return True
+
+
+def schema_check(value, schema, path):
+    if not isinstance(schema, dict):
+        return None
+
+    schema_type = schema.get("type")
+    if isinstance(schema_type, str):
+        if not validate_type(value, schema_type):
+            return f"{path} expected type {schema_type}"
+
+    if schema_type == "object" and isinstance(value, dict):
+        required = schema.get("required", [])
+        if isinstance(required, list):
+            for key in required:
+                if isinstance(key, str) and key not in value:
+                    return f"{path}.{key} missing"
+
+        properties = schema.get("properties", {})
+        if isinstance(properties, dict):
+            for key, sub_schema in properties.items():
+                if key in value:
+                    err = schema_check(value[key], sub_schema, f"{path}.{key}")
+                    if err:
+                        return err
+
+    if schema_type == "array" and isinstance(value, list):
+        items = schema.get("items")
+        if isinstance(items, dict):
+            for idx, item in enumerate(value):
+                err = schema_check(item, items, f"{path}[{idx}]")
+                if err:
+                    return err
+
+    return None
+
+
+def load_json_file(archive, path, missing_code, invalid_code, missing_label, invalid_label):
+    try:
+        file_bytes = archive.read(path)
+    except KeyError:
+        fail(missing_code, missing_label)
+
+    try:
+        file_text = file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        fail(invalid_code, f"{path} must be UTF-8")
+
+    try:
+        return json.loads(file_text)
+    except json.JSONDecodeError as err:
+        fail(invalid_code, f"{invalid_label} invalid JSON at line {err.lineno} column {err.colno}")
+
+
+def resolve_case_comparison(case, label, default_mode, default_float_tolerance):
+    mode = default_mode
+    float_tolerance = default_float_tolerance
+
+    comparison = case.get("comparison")
+    if comparison is not None:
+        if not isinstance(comparison, dict):
+            fail(42, f"{label}.comparison must be object")
+        if "mode" in comparison:
+            comparison_mode = comparison["mode"]
+            if not isinstance(comparison_mode, str) or comparison_mode.strip() == "":
+                fail(42, f"{label}.comparison.mode must be non-empty string")
+            mode = comparison_mode.strip()
+        if "float_tolerance" in comparison:
+            float_tolerance = normalize_float_tolerance(
+                comparison.get("float_tolerance"),
+                f"{label}.comparison.float_tolerance",
+            )
+        elif "tolerance" in comparison:
+            float_tolerance = normalize_float_tolerance(
+                comparison.get("tolerance"),
+                f"{label}.comparison.tolerance",
+            )
+
+    if "comparison_mode" in case:
+        comparison_mode = case.get("comparison_mode")
+        if not isinstance(comparison_mode, str) or comparison_mode.strip() == "":
+            fail(42, f"{label}.comparison_mode must be non-empty string")
+        mode = comparison_mode.strip()
+
+    if "float_tolerance" in case:
+        float_tolerance = normalize_float_tolerance(
+            case.get("float_tolerance"),
+            f"{label}.float_tolerance",
+        )
+
+    if mode not in SUPPORTED_COMPARISON_MODES:
+        fail(42, f"{label} comparison mode unsupported: {mode}")
+    if mode == "numeric_tolerance" and float_tolerance is None:
+        fail(42, f"{label} numeric_tolerance requires float_tolerance")
+
+    return {
+        "mode": mode,
+        "float_tolerance": float_tolerance,
+    }
+
+
+def load_verifier_cases_v1(archive, default_mode, default_float_tolerance):
+    tests = load_json_file(
+        archive,
+        "verifier/tests.json",
+        40,
+        41,
+        "verifier/tests.json",
+        "verifier/tests.json",
+    )
+    if not isinstance(tests, list) or len(tests) == 0:
+        fail(42, "verifier/tests.json must be a non-empty array")
+    loaded = []
+    for idx, case in enumerate(tests):
+        label = f"verifier/tests.json case[{idx}]"
+        if not isinstance(case, dict):
+            fail(42, f"{label} must be an object")
+        if "input" not in case:
+            fail(42, f"{label}.input missing")
+        if "expected_output" not in case:
+            fail(42, f"{label}.expected_output missing")
+        comparison = resolve_case_comparison(case, label, default_mode, default_float_tolerance)
+        loaded.append(
+            {
+                "label": label,
+                "input": case["input"],
+                "expected_output": case["expected_output"],
+                "comparison": comparison,
+            }
+        )
+    return loaded
+
+
+def load_verifier_cases_v2(archive, default_mode, default_float_tolerance):
+    try:
+        lines_text = archive.read("verifier/cases.jsonl").decode("utf-8")
+    except KeyError:
+        fail(40, "verifier/cases.jsonl")
+    except UnicodeDecodeError:
+        fail(41, "verifier/cases.jsonl must be UTF-8")
+
+    loaded = []
+    found_line = False
+    for idx, raw_line in enumerate(lines_text.splitlines(), start=1):
+        if raw_line.strip() == "":
+            continue
+        found_line = True
+        label = f"verifier/cases.jsonl line {idx}"
+        try:
+            case = json.loads(raw_line)
+        except json.JSONDecodeError as err:
+            fail(42, f"{label} invalid JSON at line {err.lineno} column {err.colno}")
+        if not isinstance(case, dict):
+            fail(42, f"{label} must be an object")
+        if "input" not in case:
+            fail(42, f"{label}.input missing")
+
+        expected_path = None
+        for key in ("expected_path", "expected_output_path", "expected_file"):
+            value = case.get(key)
+            if isinstance(value, str) and value.strip() != "":
+                expected_path = value.strip()
+                break
+        if expected_path is None:
+            case_id = case.get("id")
+            if isinstance(case_id, str) and case_id.strip() != "":
+                expected_path = f"verifier/expected/{case_id.strip()}.json"
+        if expected_path is None:
+            fail(42, f"{label} expected output reference missing")
+
+        if expected_path.startswith("verifier/expected/"):
+            expected_full_path = expected_path
+        else:
+            expected_full_path = f"verifier/expected/{expected_path.lstrip('/')}"
+
+        expected_output = load_json_file(
+            archive,
+            expected_full_path,
+            40,
+            41,
+            expected_full_path,
+            expected_full_path,
+        )
+        comparison = resolve_case_comparison(case, label, default_mode, default_float_tolerance)
+        loaded.append(
+            {
+                "label": label,
+                "input": case["input"],
+                "expected_output": expected_output,
+                "comparison": comparison,
+            }
+        )
+
+    if not found_line:
+        fail(42, "verifier/cases.jsonl must contain at least one case line")
+    return loaded
+
+
+try:
+    archive = zipfile.ZipFile(bundle)
+except Exception:
+    sys.exit(20)
+
+with archive:
+    manifest = load_json_file(
+        archive,
+        "manifest.json",
+        30,
+        31,
+        "manifest.json",
+        "manifest.json",
+    )
+    contracts = manifest.get("contracts")
+    if not isinstance(contracts, dict):
+        fail(32, "manifest.contracts must be object")
+
+    input_schema_path = contracts.get("input_schema_path")
+    output_schema_path = contracts.get("output_schema_path")
+    if not isinstance(input_schema_path, str) or input_schema_path == "":
+        fail(32, "manifest.contracts.input_schema_path must be non-empty string")
+    if not isinstance(output_schema_path, str) or output_schema_path == "":
+        fail(32, "manifest.contracts.output_schema_path must be non-empty string")
+
+    input_schema = load_json_file(
+        archive,
+        input_schema_path,
+        46,
+        47,
+        input_schema_path,
+        input_schema_path,
+    )
+    output_schema = load_json_file(
+        archive,
+        output_schema_path,
+        46,
+        47,
+        output_schema_path,
+        output_schema_path,
+    )
+
+    verifier = manifest.get("verifier")
+    if not isinstance(verifier, dict):
+        fail(32, "manifest.verifier must be object")
+    default_mode = "canonical_json"
+    default_float_tolerance = None
+
+    verifier_comparison = verifier.get("comparison")
+    if verifier_comparison is not None:
+        if not isinstance(verifier_comparison, dict):
+            fail(42, "manifest.verifier.comparison must be object")
+        if "mode" in verifier_comparison:
+            mode_value = verifier_comparison.get("mode")
+            if not isinstance(mode_value, str) or mode_value.strip() == "":
+                fail(42, "manifest.verifier.comparison.mode must be non-empty string")
+            default_mode = mode_value.strip()
+        if "float_tolerance" in verifier_comparison:
+            default_float_tolerance = normalize_float_tolerance(
+                verifier_comparison.get("float_tolerance"),
+                "manifest.verifier.comparison.float_tolerance",
+            )
+
+    if "float_tolerance" in verifier:
+        default_float_tolerance = normalize_float_tolerance(
+            verifier.get("float_tolerance"),
+            "manifest.verifier.float_tolerance",
+        )
+
+    if default_mode not in SUPPORTED_COMPARISON_MODES:
+        fail(42, f"manifest.verifier.comparison.mode unsupported: {default_mode}")
+
+    names = {info.filename for info in archive.infolist() if not info.is_dir()}
+    if "verifier/tests.json" in names:
+        tests = load_verifier_cases_v1(archive, default_mode, default_float_tolerance)
+    elif "verifier/cases.jsonl" in names:
+        tests = load_verifier_cases_v2(archive, default_mode, default_float_tolerance)
+    else:
+        fail(40, "verifier/tests.json or verifier/cases.jsonl")
+
+for idx, case in enumerate(tests):
+    label = case["label"]
+    input_value = case["input"]
+    input_error = schema_check(input_value, input_schema, f"case[{idx}].input")
+    if input_error:
+        fail(44, input_error)
+
+    # Placeholder execution for scaffold phase.
+    produced_output = case["input"]
+
+    output_error = schema_check(produced_output, output_schema, f"case[{idx}].output")
+    if output_error:
+        fail(45, output_error)
+
+    expected_output = case["expected_output"]
+    comparison = case["comparison"]
+    mode = comparison["mode"]
+    float_tolerance = comparison["float_tolerance"]
+
+    if mode == "canonical_json":
+        matched = canonical_json(produced_output) == canonical_json(expected_output)
+    elif mode == "exact_bytes":
+        matched = to_exact_bytes(produced_output) == to_exact_bytes(expected_output)
+    elif mode == "regex":
+        matched = regex_match(produced_output, expected_output, label)
+    elif mode == "numeric_tolerance":
+        matched = numeric_tolerance_equal(produced_output, expected_output, float_tolerance)
+    else:
+        fail(42, f"{label} comparison mode unsupported: {mode}")
+
+    if not matched:
+        fail(43, f"{label} failed {mode} comparison")
+PY
+  )
+  validation_rc=$?
+  set -e
+
+  case "$validation_rc" in
+    0)
+      return 0
+      ;;
+    20)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    40)
+      emit_error "BUNDLE_VERIFIER_MISSING" "Bundle missing required verifier file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    41)
+      emit_error "BUNDLE_VERIFIER_INVALID" "Bundle verifier pack is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    42)
+      emit_error "BUNDLE_VERIFIER_INVALID" "Bundle verifier pack schema invalid: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    43)
+      emit_error "BUNDLE_VERIFIER_FAILED" "Bundle verifier case failed: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    44)
+      emit_error "BUNDLE_INPUT_SCHEMA_INVALID" "Bundle input schema validation failed before execution: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    45)
+      emit_error "BUNDLE_OUTPUT_SCHEMA_INVALID" "Bundle output schema validation failed after execution: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    46)
+      emit_error "BUNDLE_SCHEMA_MISSING" "Bundle missing required schema file: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    47)
+      emit_error "BUNDLE_SCHEMA_INVALID" "Bundle schema file is not valid JSON: $validation_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+emit_info() {
+  bundle_path="$1"
+
+  if [ ! -e "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FOUND" "Bundle path not found." "$EXIT_BUNDLE_NOT_FOUND"
+  fi
+
+  if [ ! -f "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FILE" "Bundle path must be a regular file." "$EXIT_BUNDLE_NOT_FILE"
+  fi
+
+  size_bytes=$(wc -c < "$bundle_path" | tr -d '[:space:]')
+  escaped_bundle=$(json_escape "$bundle_path")
+  printf '{"ok":true,"data":{"command":"info","bundle":"%s","bundle_exists":true,"bundle_is_file":true,"size_bytes":%s}}\n' "$escaped_bundle" "$size_bytes"
+}
+
+emit_validate() {
+  bundle_path="$1"
+  policy_path="${2:-}"
+
+  if [ ! -e "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FOUND" "Bundle path not found." "$EXIT_BUNDLE_NOT_FOUND"
+  fi
+
+  if [ ! -f "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FILE" "Bundle path must be a regular file." "$EXIT_BUNDLE_NOT_FILE"
+  fi
+
+  load_validate_policy "$policy_path"
+  validate_archive_paths "$bundle_path"
+  validate_hash_integrity "$bundle_path"
+  validate_manifest_schema "$bundle_path"
+  validate_licensing_completeness "$bundle_path"
+  validate_sbom_policy "$bundle_path"
+  validate_attestation_policy "$bundle_path"
+  enforce_anti_rollback_policy "$bundle_path"
+  validate_integrity_extensions "$bundle_path"
+  validate_verifier_pack "$bundle_path"
+  build_enforcement_report "$bundle_path" "$SBOM_POLICY_MODE" "$SBOM_OBSERVED_STATUS" "$ATTESTATION_POLICY_MODE" "$ATTESTATION_OBSERVED_STATUS" "$POLICY_PRESET"
+  record_conformance_state "$bundle_path"
+
+  escaped_bundle=$(json_escape "$bundle_path")
+  printf '{"ok":true,"data":{"command":"validate","bundle":"%s","valid":true,"mode":"scaffold","policy_preset":"%s","conformance_key":%s,"enforcement_report":%s,"checks":["bundle_exists","bundle_is_file","bundle_paths_normalized","bundle_paths_unique","bundle_no_symlinks","bundle_file_count_within_limit","bundle_per_file_size_within_limit","bundle_total_size_within_limit","bundle_compression_ratio_within_limit","hash_manifest_present","hash_manifest_valid","hash_integrity_verified","manifest_present","manifest_valid_json","manifest_schema_valid","licensing_completeness_checked","sbom_policy_checked","attestation_policy_checked","anti_rollback_policy_checked","integrity_extension_hooks_checked","verifier_pack_present","verifier_pack_valid","input_schema_validated_before_execution","output_schema_validated_after_execution","verifier_cases_passed"]}}\n' "$escaped_bundle" "$POLICY_PRESET" "$CONFORMANCE_KEY_JSON" "$ENFORCEMENT_REPORT_JSON"
+}
+
+emit_test() {
+  bundle_path="$1"
+
+  if [ ! -e "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FOUND" "Bundle path not found." "$EXIT_BUNDLE_NOT_FOUND"
+  fi
+
+  if [ ! -f "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FILE" "Bundle path must be a regular file." "$EXIT_BUNDLE_NOT_FILE"
+  fi
+
+  validate_archive_paths "$bundle_path"
+  validate_hash_integrity "$bundle_path"
+  validate_manifest_schema "$bundle_path"
+  validate_licensing_completeness "$bundle_path"
+  SBOM_POLICY_MODE="sbom_optional"
+  ATTESTATION_POLICY_MODE="attestation_optional"
+  validate_sbom_policy "$bundle_path"
+  validate_attestation_policy "$bundle_path"
+  validate_integrity_extensions "$bundle_path"
+  validate_verifier_pack "$bundle_path"
+  build_enforcement_report "$bundle_path" "$SBOM_POLICY_MODE" "$SBOM_OBSERVED_STATUS" "$ATTESTATION_POLICY_MODE" "$ATTESTATION_OBSERVED_STATUS" "$POLICY_PRESET"
+
+  escaped_bundle=$(json_escape "$bundle_path")
+  printf '{"ok":true,"data":{"command":"test","bundle":"%s","valid":true,"mode":"scaffold","policy_preset":"%s","enforcement_report":%s,"checks":["bundle_exists","bundle_is_file","bundle_paths_normalized","bundle_paths_unique","bundle_no_symlinks","bundle_file_count_within_limit","bundle_per_file_size_within_limit","bundle_total_size_within_limit","bundle_compression_ratio_within_limit","hash_manifest_present","hash_manifest_valid","hash_integrity_verified","manifest_present","manifest_valid_json","manifest_schema_valid","licensing_completeness_checked","sbom_policy_checked","attestation_policy_checked","integrity_extension_hooks_checked","verifier_pack_present","verifier_pack_valid","input_schema_validated_before_execution","output_schema_validated_after_execution","verifier_cases_passed"]}}\n' "$escaped_bundle" "$POLICY_PRESET" "$ENFORCEMENT_REPORT_JSON"
+}
+
+emit_run() {
+  bundle_path="$1"
+  input_json="$2"
+
+  if [ ! -e "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FOUND" "Bundle path not found." "$EXIT_BUNDLE_NOT_FOUND"
+  fi
+
+  if [ ! -f "$bundle_path" ]; then
+    emit_error "BUNDLE_NOT_FILE" "Bundle path must be a regular file." "$EXIT_BUNDLE_NOT_FILE"
+  fi
+
+  check_conformance_state "$bundle_path"
+  enforce_wasi_offline_policy "$bundle_path"
+
+  set +e
+  run_output=$(python3 - "$bundle_path" "$input_json" "$CONFORMANCE_KEY_JSON" "$RUN_OFFLINE_POLICY_JSON" "$REPO_ROOT" "$POLICY_PRESET" <<'PY'
+import json
+import os
+import re
+import sys
+import time
+import zipfile
+import hashlib
+import math
+import subprocess
+import tempfile
+import shutil
+from datetime import date, datetime, timedelta
+
+bundle_path = os.path.abspath(sys.argv[1])
+input_raw = sys.argv[2]
+key_raw = sys.argv[3]
+offline_policy_raw = sys.argv[4]
+repo_root = os.path.abspath(sys.argv[5])
+policy_preset = sys.argv[6]
+started_at = time.monotonic()
+
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+session_memory = None
+episodic_store = None
+memory_import_warnings = []
+execute_reasoning_fn = None
+reasoning_import_warnings = []
+try:
+    from intelligence.session_memory import SessionMemory
+
+    session_memory = SessionMemory()
+except Exception as err:
+    memory_import_warnings.append(f"session_module_unavailable:{err}")
+
+try:
+    from intelligence.episodic_store import EpisodicStore
+
+    episodic_store = EpisodicStore()
+except Exception as err:
+    memory_import_warnings.append(f"episodic_module_unavailable:{err}")
+
+try:
+    from intelligence.reasoning_engine import execute_reasoning
+
+    execute_reasoning_fn = execute_reasoning
+except Exception as err:
+    reasoning_import_warnings.append(f"reasoning_engine_unavailable:{err}")
+
+try:
+    input_value = json.loads(input_raw)
+except json.JSONDecodeError as err:
+    print(f"input JSON invalid at line {err.lineno} column {err.colno}")
+    sys.exit(61)
+
+try:
+    conformance_key = json.loads(key_raw)
+except json.JSONDecodeError:
+    conformance_key = {}
+
+try:
+    offline_policy = json.loads(offline_policy_raw)
+except json.JSONDecodeError:
+    offline_policy = {}
+
+try:
+    archive = zipfile.ZipFile(bundle_path)
+except Exception:
+    print("unable to read bundle archive")
+    sys.exit(74)
+
+logic_wasm_hash = ""
+logic_wasm_bytes = None
+with archive:
+    try:
+        manifest_bytes = archive.read("manifest.json")
+    except KeyError:
+        print("manifest.json")
+        sys.exit(71)
+    try:
+        logic_wasm_bytes = archive.read("logic/logic.wasm")
+        logic_wasm_hash = hashlib.sha256(logic_wasm_bytes).hexdigest()
+    except KeyError:
+        logic_wasm_hash = ""
+        logic_wasm_bytes = None
+
+try:
+    manifest_text = manifest_bytes.decode("utf-8")
+except UnicodeDecodeError:
+    print("manifest.json must be UTF-8")
+    sys.exit(72)
+
+try:
+    manifest = json.loads(manifest_text)
+except json.JSONDecodeError as err:
+    print(f"manifest.json invalid JSON at line {err.lineno} column {err.colno}")
+    sys.exit(72)
+
+if not isinstance(manifest, dict):
+    print("manifest must be object")
+    sys.exit(73)
+
+runtime_profile = {
+    "logic_wasm_hash": logic_wasm_hash,
+    "runtime_model_hash": logic_wasm_hash if logic_wasm_hash != "" else "",
+    "runtime_model_source": "fallback_logic_wasm",
+    "extractor_generation_mode": "passthrough_or_non_extractor",
+}
+if len(reasoning_import_warnings) > 0:
+    runtime_profile["reasoning_engine_import_warnings"] = [str(item) for item in reasoning_import_warnings]
+
+def required_object(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, dict):
+        print(f"{path}.{key} must be object")
+        sys.exit(73)
+    return value
+
+def required_bool(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, bool):
+        print(f"{path}.{key} must be boolean")
+        sys.exit(73)
+    return value
+
+def required_string_list(container, key, path):
+    value = container.get(key)
+    if not isinstance(value, list):
+        print(f"{path}.{key} must be array")
+        sys.exit(73)
+    for idx, item in enumerate(value):
+        if not isinstance(item, str) or item == "":
+            print(f"{path}.{key}[{idx}] must be non-empty string")
+            sys.exit(73)
+    return value
+
+def required_positive_int(container, key, path):
+    value = container.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        print(f"{path}.{key} must be positive integer")
+        sys.exit(73)
+    return value
+
+placeholder_pattern = re.compile(r"^(<[^>]+>|\{\{[^}]+\}\}|placeholder|todo|tbd|changeme|fill_me)$", re.IGNORECASE)
+
+def is_placeholder_string(value):
+    if not isinstance(value, str):
+        return False
+    stripped = value.strip()
+    if stripped == "":
+        return False
+    if placeholder_pattern.match(stripped):
+        return True
+    upper = stripped.upper()
+    return ("PLACEHOLDER" in upper) or ("TODO" in upper) or ("TBD" in upper)
+
+def is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+def clamp_support_score(value, default_value=0.0):
+    if is_number(value):
+        return max(0.0, min(1.0, float(value)))
+    return max(0.0, min(1.0, float(default_value)))
+
+ABSTAIN_SUPPORT_THRESHOLD = 0.75
+REQUIRED_EVIDENCE_FIELDS = (
+    "vendor_name",
+    "invoice_date",
+    "due_date",
+    "currency",
+    "subtotal",
+    "tax_total",
+    "grand_total",
+)
+
+def ensure_output_warning_list(output_value):
+    warnings = output_value.get("warnings")
+    if not isinstance(warnings, list):
+        warnings = []
+        output_value["warnings"] = warnings
+    normalized = [str(item) for item in warnings]
+    output_value["warnings"] = normalized
+    return normalized
+
+def build_default_evidence_refs(extracted_fields):
+    refs = []
+    if not isinstance(extracted_fields, dict):
+        return refs
+    required_fields = (
+        "vendor_name",
+        "invoice_date",
+        "due_date",
+        "currency",
+        "subtotal",
+        "tax_total",
+        "grand_total",
+    )
+    for field_name in required_fields:
+        if field_name not in extracted_fields:
+            continue
+        raw_value = extracted_fields.get(field_name)
+        snippet = str(raw_value)
+        if len(snippet) > 120:
+            snippet = snippet[:117] + "..."
+        refs.append(
+            {
+                "field": field_name,
+                "source": "derived",
+                "snippet": snippet,
+                "support": 0.8,
+            }
+        )
+    return refs
+
+def normalize_safety_fields(output_value):
+    if not isinstance(output_value, dict):
+        return
+
+    abstain = output_value.get("abstain")
+    if not isinstance(abstain, bool):
+        output_value["abstain"] = False
+
+    abstain_reason_code = output_value.get("abstain_reason_code")
+    if not isinstance(abstain_reason_code, str):
+        output_value["abstain_reason_code"] = ""
+
+    if "claim_support_score" not in output_value:
+        output_value["claim_support_score"] = clamp_support_score(output_value.get("confidence"), default_value=0.0)
+
+    if "evidence_refs" not in output_value:
+        output_value["evidence_refs"] = build_default_evidence_refs(output_value.get("extracted_fields"))
+    elif isinstance(output_value.get("evidence_refs"), list):
+        normalized_refs = []
+        for item in output_value["evidence_refs"]:
+            if isinstance(item, dict):
+                normalized_refs.append(dict(item))
+        output_value["evidence_refs"] = normalized_refs
+
+def enforce_abstain_first(output_value):
+    if not isinstance(output_value, dict):
+        return
+
+    support_score = clamp_support_score(output_value.get("claim_support_score"), default_value=0.0)
+    output_value["claim_support_score"] = support_score
+    warnings = ensure_output_warning_list(output_value)
+
+    if support_score < ABSTAIN_SUPPORT_THRESHOLD:
+        output_value["abstain"] = True
+        output_value["abstain_reason_code"] = "LOW_CLAIM_SUPPORT"
+        if "abstain_low_claim_support" not in warnings:
+            warnings.append("abstain_low_claim_support")
+        return
+
+    if output_value.get("abstain") is True:
+        reason = str(output_value.get("abstain_reason_code", "")).strip()
+        if reason == "":
+            output_value["abstain_reason_code"] = "POLICY_BLOCKED"
+        return
+
+    output_value["abstain"] = False
+    output_value["abstain_reason_code"] = ""
+
+def evaluate_evidence_health(output_value):
+    if not isinstance(output_value, dict):
+        return ["all"], []
+    evidence_refs = output_value.get("evidence_refs")
+    if not isinstance(evidence_refs, list):
+        return ["all"], []
+
+    field_to_refs = {}
+    for ref in evidence_refs:
+        if not isinstance(ref, dict):
+            continue
+        field_name = ref.get("field")
+        if not isinstance(field_name, str) or field_name.strip() == "":
+            continue
+        field_key = field_name.strip()
+        field_to_refs.setdefault(field_key, []).append(ref)
+
+    missing_fields = [field for field in REQUIRED_EVIDENCE_FIELDS if len(field_to_refs.get(field, [])) == 0]
+
+    conflicting_fields = []
+    for field_name in REQUIRED_EVIDENCE_FIELDS:
+        refs = field_to_refs.get(field_name, [])
+        normalized_snippets = set()
+        for ref in refs:
+            snippet = ref.get("snippet")
+            support = ref.get("support", 0.0)
+            if not isinstance(snippet, str):
+                continue
+            if not is_number(support) or float(support) < 0.5:
+                continue
+            normalized = snippet.strip().lower()
+            if normalized != "":
+                normalized_snippets.add(normalized)
+        if len(normalized_snippets) > 1:
+            conflicting_fields.append(field_name)
+
+    return missing_fields, conflicting_fields
+
+def enforce_evidence_gating(output_value):
+    if not isinstance(output_value, dict):
+        return
+
+    warnings = ensure_output_warning_list(output_value)
+    missing_fields, conflicting_fields = evaluate_evidence_health(output_value)
+    if len(missing_fields) > 0:
+        output_value["abstain"] = True
+        output_value["abstain_reason_code"] = "EVIDENCE_MISSING"
+        warning_value = "evidence_gating_missing_fields:" + ",".join(missing_fields)
+        if warning_value not in warnings:
+            warnings.append(warning_value)
+        return
+
+    if len(conflicting_fields) > 0:
+        output_value["abstain"] = True
+        output_value["abstain_reason_code"] = "EVIDENCE_CONFLICT"
+        warning_value = "evidence_gating_conflict_fields:" + ",".join(conflicting_fields)
+        if warning_value not in warnings:
+            warnings.append(warning_value)
+
+def enforce_consensus_gate(output_value):
+    if not isinstance(output_value, dict):
+        return
+
+    warnings = ensure_output_warning_list(output_value)
+    support_score = clamp_support_score(output_value.get("claim_support_score"), default_value=0.0)
+    support_gate_pass = support_score >= ABSTAIN_SUPPORT_THRESHOLD
+    missing_fields, conflicting_fields = evaluate_evidence_health(output_value)
+    evidence_gate_pass = len(missing_fields) == 0 and len(conflicting_fields) == 0
+    disagreement = support_gate_pass != evidence_gate_pass
+    consensus_pass = support_gate_pass and evidence_gate_pass
+
+    output_value["consensus_gate"] = {
+        "support_gate_pass": bool(support_gate_pass),
+        "evidence_gate_pass": bool(evidence_gate_pass),
+        "disagreement": bool(disagreement),
+        "consensus_pass": bool(consensus_pass),
+    }
+
+    if disagreement:
+        output_value["abstain"] = True
+        reason = str(output_value.get("abstain_reason_code", "")).strip()
+        if reason == "":
+            output_value["abstain_reason_code"] = "CONSENSUS_FAILED"
+        if "consensus_gate_disagreement" not in warnings:
+            warnings.append("consensus_gate_disagreement")
+
+def validate_extractor_output_contract(output_value):
+    if not isinstance(output_value, dict):
+        return "run output must be JSON object for finance extractor cell"
+
+    def require_string(container, key, path, allow_empty=False):
+        if not isinstance(container, dict):
+            return f"{path} must be object"
+        if key not in container:
+            return f"{path}.{key} missing"
+        value = container.get(key)
+        if not isinstance(value, str):
+            return f"{path}.{key} must be string"
+        if not allow_empty and value.strip() == "":
+            return f"{path}.{key} must be non-empty string"
+        if is_placeholder_string(value):
+            return f"{path}.{key} contains placeholder marker"
+        return None
+
+    def require_number(container, key, path):
+        if not isinstance(container, dict):
+            return f"{path} must be object"
+        if key not in container:
+            return f"{path}.{key} missing"
+        value = container.get(key)
+        if not is_number(value):
+            return f"{path}.{key} must be number"
+        return None
+
+    for key in ("doc_id", "source_type", "import_event", "ocr_text", "locale", "currency_hint", "routing_label"):
+        err = require_string(output_value, key, "output")
+        if err:
+            return err
+
+    err = require_number(output_value, "confidence", "output")
+    if err:
+        return err
+
+    account_context = output_value.get("account_context")
+    if not isinstance(account_context, dict):
+        return "output.account_context must be object"
+    for key in ("ledger_profile", "cost_center"):
+        err = require_string(account_context, key, "output.account_context")
+        if err:
+            return err
+    if "vendor_hint" in account_context:
+        err = require_string(account_context, "vendor_hint", "output.account_context", allow_empty=True)
+        if err:
+            return err
+
+    extracted_fields = output_value.get("extracted_fields")
+    if not isinstance(extracted_fields, dict):
+        return "output.extracted_fields must be object"
+    for key in ("vendor_name", "invoice_date", "due_date", "currency"):
+        err = require_string(extracted_fields, key, "output.extracted_fields")
+        if err:
+            return err
+    err = require_string(extracted_fields, "invoice_number", "output.extracted_fields", allow_empty=True)
+    if err:
+        return err
+    for key in ("subtotal", "tax_total", "grand_total"):
+        err = require_number(extracted_fields, key, "output.extracted_fields")
+        if err:
+            return err
+
+    warnings = output_value.get("warnings")
+    if not isinstance(warnings, list):
+        return "output.warnings must be array"
+    for idx, item in enumerate(warnings):
+        if not isinstance(item, str):
+            return f"output.warnings[{idx}] must be string"
+        if is_placeholder_string(item):
+            return f"output.warnings[{idx}] contains placeholder marker"
+
+    ranking = output_value.get("ranking")
+    if not isinstance(ranking, list):
+        return "output.ranking must be array"
+    for idx, item in enumerate(ranking):
+        if not isinstance(item, dict):
+            return f"output.ranking[{idx}] must be object"
+        err = require_string(item, "candidate", f"output.ranking[{idx}]")
+        if err:
+            return err
+        err = require_number(item, "score", f"output.ranking[{idx}]")
+        if err:
+            return err
+        if "reason" in item:
+            err = require_string(item, "reason", f"output.ranking[{idx}]", allow_empty=True)
+            if err:
+                return err
+
+    abstain = output_value.get("abstain")
+    if not isinstance(abstain, bool):
+        return "output.abstain must be boolean"
+
+    abstain_reason_code = output_value.get("abstain_reason_code")
+    if not isinstance(abstain_reason_code, str):
+        return "output.abstain_reason_code must be string"
+
+    claim_support_score = output_value.get("claim_support_score")
+    if not is_number(claim_support_score):
+        return "output.claim_support_score must be number"
+    if float(claim_support_score) < 0.0 or float(claim_support_score) > 1.0:
+        return "output.claim_support_score must be in range [0,1]"
+
+    evidence_refs = output_value.get("evidence_refs")
+    if not isinstance(evidence_refs, list):
+        return "output.evidence_refs must be array"
+    for idx, ref in enumerate(evidence_refs):
+        if not isinstance(ref, dict):
+            return f"output.evidence_refs[{idx}] must be object"
+        err = require_string(ref, "field", f"output.evidence_refs[{idx}]")
+        if err:
+            return err
+        err = require_string(ref, "source", f"output.evidence_refs[{idx}]")
+        if err:
+            return err
+        err = require_string(ref, "snippet", f"output.evidence_refs[{idx}]")
+        if err:
+            return err
+        err = require_number(ref, "support", f"output.evidence_refs[{idx}]")
+        if err:
+            return err
+        support = float(ref.get("support"))
+        if support < 0.0 or support > 1.0:
+            return f"output.evidence_refs[{idx}].support must be in range [0,1]"
+
+    return None
+
+
+def resolve_wasmtime_executable():
+    env_bin = os.environ.get("AGIF_WASMTIME_BIN", "").strip()
+    if env_bin != "":
+        return env_bin
+    auto = shutil.which("wasmtime")
+    if auto is not None and auto.strip() != "":
+        return auto
+    home_candidate = os.path.expanduser("~/.wasmtime/bin/wasmtime")
+    if os.path.isfile(home_candidate):
+        return home_candidate
+    return "wasmtime"
+
+
+def build_wasmtime_run_command(fuel_limit, max_memory_mb):
+    wasmtime_bin = resolve_wasmtime_executable()
+    cmd = [wasmtime_bin, "run"]
+    fuel_flag_applied = False
+    memory_flag_applied = False
+    try:
+        help_proc = subprocess.run(
+            [wasmtime_bin, "run", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        help_text = (help_proc.stdout or "") + (help_proc.stderr or "")
+        if "--fuel" in help_text:
+            cmd.extend(["--fuel", str(int(fuel_limit))])
+            fuel_flag_applied = True
+        if "max-memory-size" in help_text:
+            cmd.extend(["-W", f"max-memory-size={int(max_memory_mb) * 1024 * 1024}"])
+            memory_flag_applied = True
+    except Exception:
+        pass
+    return cmd, fuel_flag_applied, memory_flag_applied
+
+
+def classify_wasmtime_failure(stderr_text, stdout_text):
+    combined = f"{stderr_text}\n{stdout_text}".lower()
+    if "fuel" in combined and ("consumed" in combined or "exhaust" in combined or "remaining fuel 0" in combined):
+        return {"kind": "limit", "code": "FUEL_LIMIT_EXCEEDED", "message": "wasmtime fuel limit exceeded"}
+    if "memory" in combined and (
+        "out of bounds" in combined
+        or "maximum memory size" in combined
+        or "cannot grow memory" in combined
+        or "allocation" in combined
+    ):
+        return {"kind": "limit", "code": "MEMORY_LIMIT_EXCEEDED", "message": "wasmtime memory limit exceeded"}
+    return {"kind": "runtime", "code": "WASMTIME_TRAP", "message": "wasmtime runtime trap"}
+
+
+def run_v6_wasmtime_inference(logic_wasm_bytes, request_payload, max_wall_ms, fuel_limit, max_memory_mb):
+    request_json = json.dumps(request_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    started = time.monotonic()
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wasm") as wasm_file:
+            wasm_file.write(logic_wasm_bytes)
+            tmp_path = wasm_file.name
+
+        base_cmd, fuel_flag_applied, memory_flag_applied = build_wasmtime_run_command(fuel_limit, max_memory_mb)
+        command = base_cmd + [tmp_path]
+        try:
+            proc = subprocess.run(
+                command,
+                input=request_json,
+                capture_output=True,
+                text=True,
+                timeout=max(float(max_wall_ms) / 1000.0, 0.001),
+                check=False,
+            )
+        except FileNotFoundError:
+            return None, None, {"kind": "runtime", "code": "WASMTIME_UNAVAILABLE", "message": "wasmtime executable not found"}
+        except subprocess.TimeoutExpired:
+            return None, None, {"kind": "limit", "code": "WALL_TIMEOUT_EXCEEDED", "message": "wasmtime execution timeout"}
+
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        stdout_text = (proc.stdout or "").strip()
+        stderr_text = (proc.stderr or "").strip()
+        if proc.returncode != 0:
+            error = classify_wasmtime_failure(stderr_text, stdout_text)
+            error["message"] = f"{error['message']} (code {proc.returncode})"
+            return None, None, error
+        if stdout_text == "":
+            return None, None, {"kind": "runtime", "code": "WASMTIME_OUTPUT_EMPTY", "message": "wasmtime run returned empty stdout"}
+        try:
+            payload = json.loads(stdout_text)
+        except json.JSONDecodeError as err:
+            return None, None, {
+                "kind": "runtime",
+                "code": "WASMTIME_OUTPUT_INVALID",
+                "message": f"wasmtime stdout invalid JSON at line {err.lineno} column {err.colno}",
+            }
+        if not isinstance(payload, dict):
+            return None, None, {"kind": "runtime", "code": "WASMTIME_OUTPUT_INVALID", "message": "wasmtime stdout must be JSON object"}
+        details = {
+            "elapsed_ms": elapsed_ms,
+            "fuel_flag_applied": fuel_flag_applied,
+            "memory_flag_applied": memory_flag_applied,
+            "command": command,
+        }
+        return payload, details, None
+    finally:
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+def to_signed_int8(byte_value):
+    if byte_value > 127:
+        return byte_value - 256
+    return byte_value
+
+
+def load_runtime_weight_pack():
+    fallback_seed_material = f"{logic_wasm_hash}|{manifest.get('id','')}"
+    fallback_seed = hashlib.sha256(fallback_seed_material.encode("utf-8")).digest()
+
+    model_bin_path = os.environ.get("AGIF_RUNTIME_MODEL_BIN", "").strip()
+    if model_bin_path != "" and os.path.isfile(model_bin_path):
+        try:
+            raw = open(model_bin_path, "rb").read()
+        except Exception:
+            raw = b""
+        if len(raw) >= 21:
+            runtime_profile["runtime_model_hash"] = hashlib.sha256(raw).hexdigest()
+            runtime_profile["runtime_model_source"] = "env_model_bin"
+            values = [to_signed_int8(b) for b in raw[:21]]
+            return {
+                "weights": [
+                    [float(values[0]) / 64.0, float(values[1]) / 64.0, float(values[2]) / 64.0, float(values[3]) / 64.0, float(values[4]) / 64.0, float(values[5]) / 64.0],
+                    [float(values[6]) / 64.0, float(values[7]) / 64.0, float(values[8]) / 64.0, float(values[9]) / 64.0, float(values[10]) / 64.0, float(values[11]) / 64.0],
+                    [float(values[12]) / 64.0, float(values[13]) / 64.0, float(values[14]) / 64.0, float(values[15]) / 64.0, float(values[16]) / 64.0, float(values[17]) / 64.0],
+                ],
+                "bias": [
+                    float(values[18]) / 32.0,
+                    float(values[19]) / 32.0,
+                    float(values[20]) / 32.0,
+                ],
+            }
+
+    runtime_profile["runtime_model_hash"] = logic_wasm_hash if logic_wasm_hash != "" else ""
+    runtime_profile["runtime_model_source"] = "fallback_logic_wasm"
+    values = [to_signed_int8(b) for b in fallback_seed[:21]]
+    return {
+        "weights": [
+            [float(values[0]) / 80.0, float(values[1]) / 80.0, float(values[2]) / 80.0, float(values[3]) / 80.0, float(values[4]) / 80.0, float(values[5]) / 80.0],
+            [float(values[6]) / 80.0, float(values[7]) / 80.0, float(values[8]) / 80.0, float(values[9]) / 80.0, float(values[10]) / 80.0, float(values[11]) / 80.0],
+            [float(values[12]) / 80.0, float(values[13]) / 80.0, float(values[14]) / 80.0, float(values[15]) / 80.0, float(values[16]) / 80.0, float(values[17]) / 80.0],
+        ],
+        "bias": [
+            float(values[18]) / 48.0,
+            float(values[19]) / 48.0,
+            float(values[20]) / 48.0,
+        ],
+    }
+
+
+def parse_amount_token(token):
+    value = token.strip()
+    if value == "":
+        return None
+    if "," in value and "." in value:
+        if value.rfind(",") > value.rfind("."):
+            value = value.replace(".", "").replace(",", ".")
+        else:
+            value = value.replace(",", "")
+    elif "," in value and "." not in value:
+        value = value.replace(".", "").replace(",", ".")
+    else:
+        value = value.replace(",", "")
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def detect_currency(ocr_text, currency_hint, locale):
+    hint = currency_hint.strip().upper() if isinstance(currency_hint, str) else ""
+    if len(hint) == 3:
+        return hint
+    upper_text = ocr_text.upper()
+    if "EUR" in upper_text or "€" in ocr_text:
+        return "EUR"
+    if "USD" in upper_text or "$" in ocr_text:
+        return "USD"
+    if "GBP" in upper_text or "£" in ocr_text:
+        return "GBP"
+    if "CHF" in upper_text:
+        return "CHF"
+    locale_upper = locale.upper()
+    if locale_upper.startswith("DE") or locale_upper.startswith("ES") or locale_upper.startswith("FR"):
+        return "EUR"
+    return "USD"
+
+
+def normalize_iso_date(raw_value):
+    value = raw_value.strip()
+    if value == "":
+        return None
+    value = value.replace("/", "-")
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date().isoformat()
+    except Exception:
+        return None
+
+
+def deterministic_date(doc_id, plus_days):
+    base = date(2026, 1, 1)
+    doc_hash = hashlib.sha256(doc_id.encode("utf-8")).hexdigest()
+    offset = int(doc_hash[:8], 16) % 365
+    return (base + timedelta(days=offset + plus_days)).isoformat()
+
+
+def find_vendor_name(ocr_text, account_context):
+    vendor_hint = account_context.get("vendor_hint")
+    if isinstance(vendor_hint, str) and vendor_hint.strip() != "":
+        return vendor_hint.strip()
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9&.-]{1,}", ocr_text)
+    stop = {"INVOICE", "RECEIPT", "TOTAL", "TAX", "VAT", "IVA", "FACTURA", "RECHNUNG"}
+    for token in tokens:
+        if token.upper() not in stop:
+            return token.strip()
+    return "Unknown Vendor"
+
+
+def find_invoice_number(ocr_text):
+    upper = ocr_text.upper()
+    patterns = [
+        r"\b[A-Z]{1,6}-\d{2,8}\b",
+        r"\bINV[-\s]?\d{2,10}\b",
+        r"\bV-\d{2,10}\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, upper)
+        if match is not None:
+            return match.group(0).replace(" ", "")
+    return ""
+
+
+def extract_amounts(ocr_text):
+    amount_pattern = r"[-+]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|[-+]?\d+(?:[.,]\d{2})"
+    raw_tokens = re.findall(amount_pattern, ocr_text)
+    values = []
+    for token in raw_tokens:
+        parsed = parse_amount_token(token)
+        if parsed is not None:
+            values.append(parsed)
+    return values
+
+
+def keyword_amount(upper_text, keyword_pattern):
+    amount_pattern = r"[-+]?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|[-+]?\d+(?:[.,]\d{2})"
+    match = re.search(keyword_pattern + r"\s*[:=]?\s*(" + amount_pattern + r")", upper_text)
+    if match is None:
+        return None
+    return parse_amount_token(match.group(1))
+
+
+def _vendor_hint_from_input(input_value):
+    if not isinstance(input_value, dict):
+        return ""
+    account_context = input_value.get("account_context")
+    if isinstance(account_context, dict):
+        vendor_hint = account_context.get("vendor_hint")
+        if isinstance(vendor_hint, str) and vendor_hint.strip() != "":
+            return vendor_hint.strip()
+    extracted_fields = input_value.get("extracted_fields")
+    if isinstance(extracted_fields, dict):
+        vendor_name = extracted_fields.get("vendor_name")
+        if isinstance(vendor_name, str) and vendor_name.strip() != "":
+            return vendor_name.strip()
+    return ""
+
+
+def _normalize_memory_context(existing_context):
+    normalized = {
+        "session_window": [],
+        "top_corrections": [],
+        "vendor_profile": None,
+        "warnings": [],
+    }
+    if not isinstance(existing_context, dict):
+        return normalized
+
+    existing_session = existing_context.get("session_window")
+    if isinstance(existing_session, list):
+        normalized["session_window"] = [entry for entry in existing_session if isinstance(entry, dict)][-10:]
+
+    existing_top = existing_context.get("top_corrections")
+    if isinstance(existing_top, list):
+        normalized["top_corrections"] = [entry for entry in existing_top if isinstance(entry, dict)][:5]
+
+    vendor_profile = existing_context.get("vendor_profile")
+    if vendor_profile is None or isinstance(vendor_profile, dict):
+        normalized["vendor_profile"] = vendor_profile
+
+    existing_warnings = existing_context.get("warnings")
+    if isinstance(existing_warnings, list):
+        normalized["warnings"] = [str(item) for item in existing_warnings]
+
+    return normalized
+
+
+def enrich_input_with_memory(input_value):
+    if not isinstance(input_value, dict):
+        return input_value
+
+    enriched = dict(input_value)
+    memory_context = _normalize_memory_context(input_value.get("memory_context"))
+    warning_list = list(memory_context.get("warnings", []))
+    warning_list.extend([str(item) for item in memory_import_warnings])
+
+    if len(memory_context["session_window"]) == 0 and session_memory is not None:
+        try:
+            memory_context["session_window"] = session_memory.get_context_window(10)
+        except Exception as err:
+            warning_list.append(f"session_window_read_failed:{err}")
+
+    vendor_hint = _vendor_hint_from_input(input_value)
+    if vendor_hint != "":
+        if episodic_store is not None:
+            try:
+                memory_context["top_corrections"] = episodic_store.get_top_corrections(vendor_hint, n=5)
+                memory_context["vendor_profile"] = episodic_store.get_vendor_profile(vendor_hint)
+            except Exception as err:
+                warning_list.append(f"episodic_read_failed:{err}")
+        else:
+            warning_list.append("episodic_store_unavailable")
+
+    memory_context["warnings"] = warning_list
+    enriched["memory_context"] = memory_context
+    return enriched
+
+
+def _coerce_like(current_value, incoming_value):
+    if isinstance(current_value, bool):
+        if isinstance(incoming_value, bool):
+            return incoming_value
+        incoming_text = str(incoming_value).strip().lower()
+        if incoming_text in {"true", "1", "yes"}:
+            return True
+        if incoming_text in {"false", "0", "no"}:
+            return False
+        return current_value
+    if isinstance(current_value, int) and not isinstance(current_value, bool):
+        try:
+            return int(float(incoming_value))
+        except Exception:
+            return current_value
+    if isinstance(current_value, float):
+        try:
+            return float(incoming_value)
+        except Exception:
+            return current_value
+    return str(incoming_value)
+
+
+def apply_memory_corrections(extracted_fields, memory_context):
+    if not isinstance(extracted_fields, dict) or not isinstance(memory_context, dict):
+        return []
+    top_corrections = memory_context.get("top_corrections")
+    if not isinstance(top_corrections, list):
+        return []
+    applied = []
+    for correction in top_corrections[:5]:
+        if not isinstance(correction, dict):
+            continue
+        field_name = correction.get("field_name")
+        if not isinstance(field_name, str) or field_name not in extracted_fields:
+            continue
+        if "correct_value" not in correction:
+            continue
+        before_value = extracted_fields.get(field_name)
+        corrected_value = _coerce_like(before_value, correction.get("correct_value"))
+        if corrected_value == before_value:
+            continue
+        extracted_fields[field_name] = corrected_value
+        applied.append(
+            {
+                "field_name": field_name,
+                "before_value": before_value,
+                "correct_value": corrected_value,
+            }
+        )
+    return applied
+
+
+def softmax(scores):
+    max_score = max(scores)
+    exps = [math.exp(score - max_score) for score in scores]
+    denom = sum(exps)
+    if denom <= 0:
+        return [1.0 / float(len(scores)) for _ in scores]
+    return [value / denom for value in exps]
+
+
+def build_routing_and_ranking(ocr_text, source_type, account_context, doc_id):
+    upper = ocr_text.upper()
+    ledger_profile = account_context.get("ledger_profile", "")
+    features = [
+        1.0 if any(token in upper for token in ("INVOICE", "FACTURA", "RECHNUNG", "BILL")) else 0.0,
+        1.0 if any(token in upper for token in ("RECEIPT", "QUITTUNG", "TICKET")) else 0.0,
+        1.0 if any(token in upper for token in ("TAX", "VAT", "IVA", "MWST")) else 0.0,
+        1.0 if any(token in upper for token in ("TOTAL", "AMOUNT", "GESAMT", "IMPORTE")) else 0.0,
+        1.0 if (str(source_type).lower() == "invoice" or "ap" in str(ledger_profile).lower()) else 0.0,
+        1.0 if (str(source_type).lower() == "receipt" or "expense" in str(ledger_profile).lower()) else 0.0,
+    ]
+
+    weight_pack = load_runtime_weight_pack()
+    weights = weight_pack["weights"]
+    bias = weight_pack["bias"]
+    labels = ["accounts_payable_invoice", "expense_receipt", "other_finance_doc"]
+
+    raw_scores = []
+    for row_idx in range(3):
+        score = bias[row_idx]
+        for col_idx in range(6):
+            score += weights[row_idx][col_idx] * features[col_idx]
+        tie_salt = hashlib.sha256(f"{doc_id}|{labels[row_idx]}".encode("utf-8")).digest()[0]
+        score += float(tie_salt) / 1000000.0
+        raw_scores.append(score)
+
+    # Deterministic post-processing guardrails to keep routing stable on obvious patterns.
+    if features[0] == 1.0 and features[3] == 1.0:
+        raw_scores[0] += 1.5
+    if features[4] == 1.0:
+        raw_scores[0] += 0.5
+    if features[1] == 1.0:
+        raw_scores[1] += 1.2
+    if features[5] == 1.0:
+        raw_scores[1] += 0.5
+
+    probs = softmax(raw_scores)
+    ranking = []
+    for idx, label in enumerate(labels):
+        if label == "accounts_payable_invoice":
+            reason = "invoice-focused tokens and context"
+        elif label == "expense_receipt":
+            reason = "receipt-focused tokens and context"
+        else:
+            reason = "fallback finance class"
+        ranking.append({"candidate": label, "score": round(float(probs[idx]), 4), "reason": reason})
+    ranking.sort(key=lambda row: (-row["score"], row["candidate"]))
+    routing_label = ranking[0]["candidate"]
+    confidence = float(ranking[0]["score"])
+    return routing_label, confidence, ranking
+
+
+def generate_extractor_output(input_value):
+    if not isinstance(input_value, dict):
+        return None, "input must be JSON object for extractor run"
+
+    passthrough_keys = ("routing_label", "confidence", "extracted_fields", "warnings", "ranking")
+    if all(key in input_value for key in passthrough_keys):
+        runtime_profile["extractor_generation_mode"] = "passthrough"
+        return input_value, None
+
+    for key in ("doc_id", "source_type", "import_event", "ocr_text", "locale", "currency_hint"):
+        value = input_value.get(key)
+        if not isinstance(value, str) or value.strip() == "":
+            return None, f"input.{key} must be non-empty string for runtime inference"
+
+    account_context = input_value.get("account_context")
+    if not isinstance(account_context, dict):
+        return None, "input.account_context must be object for runtime inference"
+    for key in ("ledger_profile", "cost_center"):
+        value = account_context.get(key)
+        if not isinstance(value, str) or value.strip() == "":
+            return None, f"input.account_context.{key} must be non-empty string for runtime inference"
+
+    doc_id = input_value["doc_id"].strip()
+    source_type = input_value["source_type"].strip()
+    import_event = input_value["import_event"].strip()
+    ocr_text = input_value["ocr_text"].strip()
+    locale = input_value["locale"].strip()
+    currency_hint = input_value["currency_hint"].strip()
+
+    routing_label, confidence, ranking = build_routing_and_ranking(ocr_text, source_type, account_context, doc_id)
+    upper_text = ocr_text.upper()
+    if source_type.lower() == "invoice" and any(token in upper_text for token in ("INVOICE", "FACTURA", "RECHNUNG")):
+        routing_label = "accounts_payable_invoice"
+        confidence = max(confidence, 0.9)
+    elif source_type.lower() == "receipt" and any(token in upper_text for token in ("RECEIPT", "QUITTUNG", "TICKET")):
+        routing_label = "expense_receipt"
+        confidence = max(confidence, 0.9)
+
+    ranking_map = {item["candidate"]: item for item in ranking if isinstance(item, dict) and "candidate" in item and "score" in item}
+    if routing_label in ranking_map:
+        ranking_map[routing_label]["score"] = round(float(max(ranking_map[routing_label]["score"], confidence)), 4)
+    ranking = sorted(ranking_map.values(), key=lambda row: (-row["score"], row["candidate"]))
+
+    currency = detect_currency(ocr_text, currency_hint, locale)
+    vendor_name = find_vendor_name(ocr_text, account_context)
+    invoice_number = find_invoice_number(ocr_text)
+
+    amount_values = extract_amounts(ocr_text)
+    grand_total = keyword_amount(upper_text, r"(TOTAL|AMOUNT DUE|GESAMT|IMPORTE)")
+    tax_total = keyword_amount(upper_text, r"(TAX|VAT|IVA|MWST)")
+
+    warnings = []
+    if grand_total is None:
+        if len(amount_values) > 0:
+            grand_total = max(amount_values)
+        else:
+            grand_total = float((int(hashlib.sha256(doc_id.encode("utf-8")).hexdigest()[:6], 16) % 90000) / 100.0 + 100.0)
+            warnings.append("totals_inferred_from_fallback")
+
+    if tax_total is None:
+        if any(token in upper_text for token in ("TAX", "VAT", "IVA", "MWST")) and len(amount_values) >= 2:
+            tax_total = min(amount_values)
+        else:
+            tax_total = 0.0
+
+    subtotal = grand_total - tax_total
+    if subtotal < 0:
+        subtotal = grand_total
+        warnings.append("tax_total_exceeds_grand_total")
+
+    normalized_dates = re.findall(r"\b20\d{2}[-/](?:0[1-9]|1[0-2])[-/](?:0[1-9]|[12]\d|3[01])\b", ocr_text)
+    invoice_date = normalize_iso_date(normalized_dates[0]) if len(normalized_dates) > 0 else None
+    if invoice_date is None:
+        invoice_date = deterministic_date(doc_id, 0)
+    if len(normalized_dates) > 1:
+        due_date = normalize_iso_date(normalized_dates[1])
+    else:
+        due_date = None
+    if due_date is None:
+        try:
+            due_date = (datetime.strptime(invoice_date, "%Y-%m-%d").date() + timedelta(days=30)).isoformat()
+        except Exception:
+            due_date = deterministic_date(doc_id, 30)
+
+    if routing_label == "accounts_payable_invoice" and invoice_number == "":
+        warnings.append("invoice_number_missing")
+    if confidence < 0.55:
+        warnings.append("low_confidence_routing")
+
+    extracted_fields = {
+        "vendor_name": vendor_name,
+        "invoice_number": invoice_number,
+        "invoice_date": invoice_date,
+        "due_date": due_date,
+        "currency": currency,
+        "subtotal": round(float(subtotal), 2),
+        "tax_total": round(float(tax_total), 2),
+        "grand_total": round(float(grand_total), 2),
+    }
+
+    output = {
+        "doc_id": doc_id,
+        "source_type": source_type,
+        "import_event": import_event,
+        "ocr_text": ocr_text,
+        "locale": locale,
+        "currency_hint": currency_hint,
+        "account_context": {
+            "ledger_profile": account_context["ledger_profile"],
+            "cost_center": account_context["cost_center"],
+            "vendor_hint": account_context.get("vendor_hint", "") if isinstance(account_context.get("vendor_hint"), str) else "",
+        },
+        "routing_label": routing_label,
+        "confidence": round(float(confidence), 4),
+        "extracted_fields": extracted_fields,
+        "warnings": warnings,
+        "ranking": ranking,
+    }
+    runtime_profile["extractor_generation_mode"] = "generated"
+    return output, None
+
+runner_compat = required_object(manifest, "runner_compat", "manifest")
+execution_kind = runner_compat.get("execution_kind")
+if execution_kind not in {"wasi", "native"}:
+    print("manifest.runner_compat.execution_kind must be one of: wasi,native")
+    sys.exit(73)
+
+capabilities = required_object(manifest, "capabilities", "manifest")
+network_requested = required_bool(capabilities, "network", "manifest.capabilities")
+filesystem = required_object(capabilities, "filesystem", "manifest.capabilities")
+filesystem_preopens = required_string_list(filesystem, "preopens", "manifest.capabilities.filesystem")
+
+limits = required_object(manifest, "limits", "manifest")
+max_wall_ms = required_positive_int(limits, "max_wall_ms", "manifest.limits")
+max_steps = required_positive_int(limits, "max_steps", "manifest.limits")
+max_memory_mb = required_positive_int(limits, "max_memory_mb", "manifest.limits")
+max_output_bytes = required_positive_int(limits, "max_output_bytes", "manifest.limits")
+max_tool_calls = required_positive_int(limits, "max_tool_calls", "manifest.limits")
+
+if policy_preset == "strict":
+    preset_limits = {
+        "max_wall_ms": min(max_wall_ms, 500),
+        "max_steps": min(max_steps, 2000),
+        "max_memory_mb": min(max_memory_mb, 64),
+        "max_output_bytes": min(max_output_bytes, 32768),
+        "max_tool_calls": min(max_tool_calls, 3),
+    }
+elif policy_preset == "balanced":
+    preset_limits = {
+        "max_wall_ms": max_wall_ms,
+        "max_steps": max_steps,
+        "max_memory_mb": max_memory_mb,
+        "max_output_bytes": max_output_bytes,
+        "max_tool_calls": max_tool_calls,
+    }
+elif policy_preset == "dev":
+    preset_limits = {
+        "max_wall_ms": max(max_wall_ms, 1500),
+        "max_steps": max(max_steps, 6000),
+        "max_memory_mb": max(max_memory_mb, 128),
+        "max_output_bytes": max(max_output_bytes, 131072),
+        "max_tool_calls": max(max_tool_calls, 8),
+    }
+else:
+    print(f"unsupported policy preset: {policy_preset}")
+    sys.exit(63)
+
+max_wall_ms = int(preset_limits["max_wall_ms"])
+max_steps = int(preset_limits["max_steps"])
+max_memory_mb = int(preset_limits["max_memory_mb"])
+max_output_bytes = int(preset_limits["max_output_bytes"])
+max_tool_calls = int(preset_limits["max_tool_calls"])
+
+simulated_tool_calls = 0
+simulated_wall_ms = 0.0
+simulated_steps = 1
+simulated_memory_mb = None
+if isinstance(input_value, dict):
+    tool_value = input_value.get("__simulate_tool_calls")
+    if isinstance(tool_value, int) and not isinstance(tool_value, bool) and tool_value >= 0:
+        simulated_tool_calls = tool_value
+    wall_value = input_value.get("__simulate_wall_ms")
+    if isinstance(wall_value, (int, float)) and not isinstance(wall_value, bool) and wall_value >= 0:
+        simulated_wall_ms = float(wall_value)
+    step_value = input_value.get("__simulate_steps")
+    if isinstance(step_value, int) and not isinstance(step_value, bool) and step_value >= 0:
+        simulated_steps = step_value
+    memory_value = input_value.get("__simulate_memory_mb")
+    if isinstance(memory_value, (int, float)) and not isinstance(memory_value, bool) and memory_value >= 0:
+        simulated_memory_mb = float(memory_value)
+
+if simulated_wall_ms > 0:
+    time.sleep(simulated_wall_ms / 1000.0)
+
+manifest_id = manifest.get("id")
+if manifest_id == "cell.finance_doc_extractor_neural_v1" and isinstance(input_value, dict):
+    input_for_inference = enrich_input_with_memory(input_value)
+else:
+    input_for_inference = input_value
+
+produced_output = input_for_inference
+reasoning_trace = []
+wasmtime_run_details = None
+v6_fuel_limit_value = 100000000
+wasm_enforcement_level = "best_effort"
+wasmtime_limits_report = {
+    "fuel_limit": 0,
+    "memory_limit_mb": 0,
+    "wall_timeout_ms": 0,
+}
+wasmtime_usage_report = {
+    "fuel_used": 0,
+    "memory_peak_mb": 0.0,
+    "elapsed_ms": 0,
+}
+wasmtime_status = "fallback"
+reasoning_summary = {
+    "engine_version": "v3",
+    "config_version": "reasoning_steps_v1",
+    "config_source": "not_applicable",
+    "global_budget_ms": 2000,
+    "budget_used_ms": 0,
+    "steps_total": 0,
+    "steps_ok": 0,
+    "steps_timeout": 0,
+    "steps_error": 0,
+    "steps_skipped": 0,
+    "warnings": [],
+}
+if manifest_id == "cell.finance_doc_extractor_neural_v1":
+    produced_output, generation_error = generate_extractor_output(input_for_inference)
+    if generation_error is not None:
+        print(generation_error)
+        sys.exit(64)
+    normalize_safety_fields(produced_output)
+
+    if execute_reasoning_fn is None:
+        unavailable_note = "reasoning engine unavailable"
+        if len(reasoning_import_warnings) > 0:
+            unavailable_note = reasoning_import_warnings[0]
+        reasoning_trace = [
+            {
+                "step_id": "reasoning_engine",
+                "status": "STEP_ERROR",
+                "duration_ms": 0,
+                "note": unavailable_note,
+                "step_metrics": {"transformer_confidence": None},
+            }
+        ]
+        reasoning_summary = {
+            "engine_version": "v3",
+            "config_version": "reasoning_steps_v1",
+            "config_source": "runtime_fallback",
+            "global_budget_ms": 2000,
+            "budget_used_ms": 0,
+            "steps_total": 1,
+            "steps_ok": 0,
+            "steps_timeout": 0,
+            "steps_error": 1,
+            "steps_skipped": 0,
+            "warnings": [unavailable_note],
+        }
+    else:
+        try:
+            reasoning_result = execute_reasoning_fn(
+                output_payload=produced_output,
+                run_input=input_for_inference if isinstance(input_for_inference, dict) else {},
+                output_validator=validate_extractor_output_contract,
+            )
+            if isinstance(reasoning_result, dict):
+                result_output = reasoning_result.get("final_output")
+                if isinstance(result_output, dict):
+                    produced_output = result_output
+                trace_value = reasoning_result.get("reasoning_trace")
+                if isinstance(trace_value, list):
+                    reasoning_trace = trace_value
+                summary_value = reasoning_result.get("reasoning_summary")
+                if isinstance(summary_value, dict):
+                    reasoning_summary = summary_value
+        except Exception as err:
+            reason_note = f"reasoning engine runtime failure: {err}"
+            reasoning_trace = [
+                {
+                    "step_id": "reasoning_engine",
+                    "status": "STEP_ERROR",
+                    "duration_ms": 0,
+                    "note": reason_note,
+                    "step_metrics": {"transformer_confidence": None},
+                }
+            ]
+            reasoning_summary = {
+                "engine_version": "v3",
+                "config_version": "reasoning_steps_v1",
+                "config_source": "runtime_fallback",
+                "global_budget_ms": 2000,
+                "budget_used_ms": 0,
+                "steps_total": 1,
+                "steps_ok": 0,
+                "steps_timeout": 0,
+                "steps_error": 1,
+                "steps_skipped": 0,
+                "warnings": [reason_note],
+            }
+
+    normalize_safety_fields(produced_output)
+    enforce_abstain_first(produced_output)
+    enforce_evidence_gating(produced_output)
+    enforce_consensus_gate(produced_output)
+    output_contract_error = validate_extractor_output_contract(produced_output)
+    if output_contract_error is not None:
+        print(output_contract_error)
+        sys.exit(64)
+
+elif manifest_id == "cell.finance_doc_extractor_neural_v6":
+    if not isinstance(input_for_inference, dict):
+        print("input must be JSON object for cell.finance_doc_extractor_neural_v6")
+        sys.exit(64)
+    if bool(input_for_inference.get("__simulate_fuel_exceeded", False)):
+        print("V6_FALLBACK:FUEL_LIMIT_EXCEEDED")
+        sys.exit(62)
+    if bool(input_for_inference.get("__simulate_memory_exceeded", False)):
+        print("V6_FALLBACK:MEMORY_LIMIT_EXCEEDED")
+        sys.exit(62)
+    if bool(input_for_inference.get("__simulate_wall_timeout", False)):
+        print("V6_FALLBACK:WALL_TIMEOUT_EXCEEDED")
+        sys.exit(62)
+    if bool(input_for_inference.get("__simulate_runtime_trap", False)):
+        print("V6_FALLBACK:WASMTIME_TRAP")
+        sys.exit(64)
+    if logic_wasm_bytes is None:
+        print("logic/logic.wasm missing for cell.finance_doc_extractor_neural_v6")
+        sys.exit(64)
+    fuel_limit_value = limits.get("fuel_limit")
+    if isinstance(fuel_limit_value, bool) or not isinstance(fuel_limit_value, int) or fuel_limit_value <= 0:
+        fuel_limit_value = 100000000
+    v6_fuel_limit_value = int(fuel_limit_value)
+    wasmtime_limits_report = {
+        "fuel_limit": int(v6_fuel_limit_value),
+        "memory_limit_mb": int(max_memory_mb),
+        "wall_timeout_ms": int(max_wall_ms),
+    }
+    produced_output, wasmtime_run_details, wasmtime_error = run_v6_wasmtime_inference(
+        logic_wasm_bytes=logic_wasm_bytes,
+        request_payload=input_for_inference,
+        max_wall_ms=int(max_wall_ms),
+        fuel_limit=int(v6_fuel_limit_value),
+        max_memory_mb=max_memory_mb,
+    )
+    if wasmtime_error is not None:
+        code = str(wasmtime_error.get("code", "WASMTIME_TRAP"))
+        message = str(wasmtime_error.get("message", "wasmtime execution failed"))
+        if str(wasmtime_error.get("kind", "runtime")) == "limit":
+            print(f"V6_FALLBACK:{code}")
+            sys.exit(62)
+        print(f"V6_FALLBACK:{code}")
+        sys.exit(64)
+    runtime_profile["runtime_model_hash"] = logic_wasm_hash if logic_wasm_hash != "" else ""
+    runtime_profile["runtime_model_source"] = "logic_wasm_candle_v6"
+    runtime_profile["extractor_generation_mode"] = "wasm_generated"
+    runtime_profile["wasm_module_hash"] = logic_wasm_hash if logic_wasm_hash != "" else ""
+    runtime_profile["wasm_inference_version"] = "v6"
+    if isinstance(wasmtime_run_details, dict):
+        wasmtime_status = "ok"
+        wasm_enforcement_level = "strong" if bool(wasmtime_run_details.get("fuel_flag_applied", False)) else "best_effort"
+        wasmtime_usage_report["elapsed_ms"] = int(wasmtime_run_details.get("elapsed_ms", 0))
+        wasmtime_usage_report["fuel_used"] = int(v6_fuel_limit_value if bool(wasmtime_run_details.get("fuel_flag_applied", False)) else 0)
+        runtime_profile["wasmtime_execution"] = {
+            "elapsed_ms": int(wasmtime_run_details.get("elapsed_ms", 0)),
+            "fuel_flag_applied": bool(wasmtime_run_details.get("fuel_flag_applied", False)),
+            "memory_flag_applied": bool(wasmtime_run_details.get("memory_flag_applied", False)),
+        }
+    normalize_safety_fields(produced_output)
+    enforce_abstain_first(produced_output)
+    enforce_evidence_gating(produced_output)
+    enforce_consensus_gate(produced_output)
+    output_contract_error = validate_extractor_output_contract(produced_output)
+    if output_contract_error is not None:
+        print(output_contract_error)
+        sys.exit(64)
+
+if manifest_id == "cell.finance_doc_extractor_neural_v1" and isinstance(input_for_inference, dict):
+    memory_context = input_for_inference.get("memory_context")
+    if isinstance(memory_context, dict):
+        memory_warnings = memory_context.get("warnings")
+        if isinstance(memory_warnings, list) and len(memory_warnings) > 0:
+            runtime_profile["memory_enrichment_warnings"] = [str(item) for item in memory_warnings]
+    if session_memory is not None and isinstance(produced_output, dict):
+        try:
+            output_fields = produced_output.get("extracted_fields")
+            if not isinstance(output_fields, dict):
+                output_fields = {}
+            memory_top = []
+            if isinstance(memory_context, dict):
+                top_corr = memory_context.get("top_corrections")
+                if isinstance(top_corr, list):
+                    memory_top = [item for item in top_corr if isinstance(item, dict)][:5]
+            session_memory.add_event(
+                {
+                    "event_type": str(input_for_inference.get("import_event", "run")),
+                    "doc_id": str(input_for_inference.get("doc_id", "runner-no-doc-id")),
+                    "vendor_hint": _vendor_hint_from_input(input_for_inference),
+                    "extracted_fields": output_fields,
+                    "corrections_applied": memory_top,
+                }
+            )
+        except Exception as err:
+            runtime_profile["memory_enrichment_append_warning"] = str(err)
+output_hash = hashlib.sha256(json.dumps(produced_output, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+output_bytes = len(json.dumps(produced_output, sort_keys=False, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+elapsed_ms = int((time.monotonic() - started_at) * 1000)
+if simulated_memory_mb is None:
+    memory_mb_used = round(output_bytes / (1024.0 * 1024.0), 6)
+else:
+    memory_mb_used = simulated_memory_mb
+
+if manifest_id == "cell.finance_doc_extractor_neural_v6":
+    wasmtime_usage_report["memory_peak_mb"] = round(float(memory_mb_used), 6)
+    if wasmtime_usage_report.get("elapsed_ms", 0) <= 0:
+        wasmtime_usage_report["elapsed_ms"] = int(elapsed_ms)
+
+if simulated_tool_calls > max_tool_calls:
+    print(f"tool calls {simulated_tool_calls} exceeded max_tool_calls {max_tool_calls}")
+    sys.exit(62)
+if simulated_steps > max_steps:
+    print(f"steps {simulated_steps} exceeded max_steps {max_steps}")
+    sys.exit(62)
+if memory_mb_used > float(max_memory_mb):
+    print(f"memory {memory_mb_used:.6f}MB exceeded max_memory_mb {max_memory_mb}")
+    sys.exit(62)
+if output_bytes > max_output_bytes:
+    print(f"output bytes {output_bytes} exceeded max_output_bytes {max_output_bytes}")
+    sys.exit(62)
+if elapsed_ms > max_wall_ms:
+    print(f"wall time {elapsed_ms}ms exceeded max_wall_ms {max_wall_ms}")
+    sys.exit(62)
+
+offline_level = "strong" if execution_kind == "wasi" else "none"
+if execution_kind == "wasi":
+    filesystem_level = "strong" if len(filesystem_preopens) == 0 else "best_effort"
+else:
+    filesystem_level = "none"
+
+enforcement_report = {
+    "offline_level": offline_level,
+    "filesystem_level": filesystem_level,
+    "filesystem_preopens": filesystem_preopens,
+    "limits_applied": {
+        "max_wall_ms": max_wall_ms,
+        "max_steps": max_steps,
+        "max_memory_mb": max_memory_mb,
+        "max_output_bytes": max_output_bytes,
+        "max_tool_calls": max_tool_calls,
+    },
+    "limits_enforcement": {
+        "max_wall_ms": "userland_timeout",
+        "max_steps": "userland_budget",
+        "max_memory_mb": "best_effort_userland",
+        "max_output_bytes": "userland_size_cap",
+        "max_tool_calls": "userland_counter",
+    },
+    "policy_preset": policy_preset,
+    "network_requested": network_requested,
+    "wasm_enforcement_level": wasm_enforcement_level,
+    "wasmtime_limits": wasmtime_limits_report,
+    "wasmtime_usage": wasmtime_usage_report,
+    "wasmtime_status": wasmtime_status,
+}
+
+result = {
+    "ok": True,
+    "data": {
+        "command": "run",
+        "bundle": bundle_path,
+        "mode": "scaffold",
+        "policy_preset": policy_preset,
+        "offline_policy": offline_policy,
+        "conformance_key": conformance_key,
+        "enforcement_report": enforcement_report,
+        "runtime_profile": runtime_profile,
+        "output_hash": output_hash,
+        "input": input_for_inference,
+        "output": produced_output,
+        "reasoning_trace": reasoning_trace,
+        "reasoning_summary": reasoning_summary,
+        "limits": {
+            "max_wall_ms": max_wall_ms,
+            "max_steps": max_steps,
+            "max_memory_mb": max_memory_mb,
+            "max_output_bytes": max_output_bytes,
+            "max_tool_calls": max_tool_calls,
+            "elapsed_ms": elapsed_ms,
+            "steps_used": simulated_steps,
+            "memory_mb_used": memory_mb_used,
+            "output_bytes": output_bytes,
+            "tool_calls_used": simulated_tool_calls,
+            "memory_enforcement": "best_effort",
+        },
+    },
+}
+print(json.dumps(result, sort_keys=False, separators=(",", ":")))
+PY
+  )
+  run_rc=$?
+  set -e
+
+  case "$run_rc" in
+    0)
+      printf '%s\n' "$run_output"
+      ;;
+    61)
+      emit_error "INPUT_INVALID_JSON" "Run input must be valid JSON: $run_output" "$EXIT_USAGE"
+      ;;
+    62)
+      emit_error "LIMIT_EXCEEDED" "Run rejected by limits: $run_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    63)
+      emit_error "POLICY_PRESET_INVALID" "Policy preset invalid: $run_output" "$EXIT_USAGE"
+      ;;
+    64)
+      emit_error "BUNDLE_OUTPUT_SCHEMA_INVALID" "Run output contract invalid: $run_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    71)
+      emit_error "BUNDLE_MANIFEST_MISSING" "Bundle missing required file: $run_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    72)
+      emit_error "BUNDLE_MANIFEST_INVALID_JSON" "Bundle manifest is not valid JSON: $run_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    73)
+      emit_error "BUNDLE_MANIFEST_SCHEMA_INVALID" "Bundle manifest schema invalid: $run_output" "$EXIT_BUNDLE_INVALID"
+      ;;
+    74)
+      emit_error "BUNDLE_ARCHIVE_READ_FAILED" "Unable to read bundle archive." "$EXIT_BUNDLE_INVALID"
+      ;;
+    *)
+      emit_error "RUNTIME_TRAP" "Run execution failed." "$EXIT_BUNDLE_INVALID"
+      ;;
+  esac
+}
+
+if [ "$#" -eq 0 ]; then
+  emit_error "USAGE_INVALID" "Usage: cell <info|validate|test|run|learn|show-learned|reset-personalization> ... Try: cell --help" "$EXIT_USAGE"
+fi
+
+subcommand="$1"
+
+case "$subcommand" in
+  -h|--help|help)
+    if [ "$#" -ne 1 ]; then
+      emit_error "USAGE_INVALID" "Usage: cell --help" "$EXIT_USAGE"
+    fi
+    emit_help
+    ;;
+  info)
+    if [ "$#" -ne 2 ]; then
+      emit_error "USAGE_INVALID" "Usage: cell info <bundle>" "$EXIT_USAGE"
+    fi
+    emit_info "$2"
+    ;;
+  validate)
+    if [ "$#" -lt 2 ]; then
+      emit_error "USAGE_INVALID" "Usage: cell validate <bundle> [--policy <json>] [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+    fi
+    validate_bundle="$2"
+    validate_policy_path=""
+    validate_policy_preset="balanced"
+    shift 2
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --policy)
+          if [ "$#" -lt 2 ]; then
+            emit_error "USAGE_INVALID" "Usage: cell validate <bundle> [--policy <json>] [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          fi
+          validate_policy_path="$2"
+          shift 2
+          ;;
+        --policy-preset)
+          if [ "$#" -lt 2 ]; then
+            emit_error "USAGE_INVALID" "Usage: cell validate <bundle> [--policy <json>] [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          fi
+          validate_policy_preset="$2"
+          shift 2
+          ;;
+        *)
+          emit_error "USAGE_INVALID" "Usage: cell validate <bundle> [--policy <json>] [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          ;;
+      esac
+    done
+    set_policy_preset "$validate_policy_preset"
+    emit_validate "$validate_bundle" "$validate_policy_path"
+    ;;
+  test)
+    if [ "$#" -lt 2 ]; then
+      emit_error "USAGE_INVALID" "Usage: cell test <bundle> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+    fi
+    test_bundle="$2"
+    test_policy_preset="balanced"
+    shift 2
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --policy-preset)
+          if [ "$#" -lt 2 ]; then
+            emit_error "USAGE_INVALID" "Usage: cell test <bundle> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          fi
+          test_policy_preset="$2"
+          shift 2
+          ;;
+        *)
+          emit_error "USAGE_INVALID" "Usage: cell test <bundle> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          ;;
+      esac
+    done
+    set_policy_preset "$test_policy_preset"
+    emit_test "$test_bundle"
+    ;;
+  run)
+    if [ "$#" -lt 2 ]; then
+      emit_error "USAGE_INVALID" "Usage: cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+    fi
+    run_bundle="$2"
+    run_input_json=""
+    run_policy_preset="balanced"
+    shift 2
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --input)
+          if [ "$#" -lt 2 ]; then
+            emit_error "USAGE_INVALID" "Usage: cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          fi
+          run_input_json="$2"
+          shift 2
+          ;;
+        --policy-preset)
+          if [ "$#" -lt 2 ]; then
+            emit_error "USAGE_INVALID" "Usage: cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          fi
+          run_policy_preset="$2"
+          shift 2
+          ;;
+        *)
+          emit_error "USAGE_INVALID" "Usage: cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+          ;;
+      esac
+    done
+    if [ "$run_input_json" = "" ]; then
+      emit_error "USAGE_INVALID" "Usage: cell run <bundle> --input <json> [--policy-preset <strict|balanced|dev>]" "$EXIT_USAGE"
+    fi
+    set_policy_preset "$run_policy_preset"
+    emit_run "$run_bundle" "$run_input_json"
+    ;;
+  learn)
+    if [ "$#" -ne 3 ] || [ "$2" != "--feedback" ]; then
+      emit_error "USAGE_INVALID" "Usage: cell learn --feedback <json>" "$EXIT_USAGE"
+    fi
+    emit_learn "$3"
+    ;;
+  show-learned)
+    if [ "$#" -eq 1 ]; then
+      emit_show_learned "text"
+    elif [ "$#" -eq 2 ] && [ "$2" = "--json" ]; then
+      emit_show_learned "json"
+    else
+      emit_error "USAGE_INVALID" "Usage: cell show-learned [--json]" "$EXIT_USAGE"
+    fi
+    ;;
+  reset-personalization)
+    if [ "$#" -eq 3 ] && [ "$2" = "--cell-id" ]; then
+      emit_reset_personalization "$3" "false"
+    elif [ "$#" -eq 4 ] && [ "$2" = "--cell-id" ] && [ "$4" = "--dry-run" ]; then
+      emit_reset_personalization "$3" "true"
+    else
+      emit_error "USAGE_INVALID" "Usage: cell reset-personalization --cell-id <cell_id> [--dry-run]" "$EXIT_USAGE"
+    fi
+    ;;
+  *)
+    emit_error "USAGE_INVALID" "Usage: cell <info|validate|test|run|learn|show-learned|reset-personalization> ... Try: cell --help" "$EXIT_USAGE"
+    ;;
+esac

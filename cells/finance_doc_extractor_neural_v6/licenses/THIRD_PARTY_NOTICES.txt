@@ -1,0 +1,2 @@
+AGIF finance_doc_extractor_neural_v6 notice file.
+All bundled components are tracked under repository licensing policy.

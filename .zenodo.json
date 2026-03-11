@@ -1,0 +1,19 @@
+{
+  "title": "AGIF Tasklet Cell",
+  "description": "Public research snapshot for verifier-backed offline AI artifacts in native applications. The software/code portion is intended for Apache-2.0 release, while documentation and paper-support evidence are released under CC BY 4.0 as described in the repository license matrix.",
+  "upload_type": "software",
+  "publication_date": "2026-03-11",
+  "license": "Apache-2.0",
+  "creators": [
+    {
+      "name": "Ahsadin"
+    }
+  ],
+  "keywords": [
+    "offline AI",
+    "native applications",
+    "WebAssembly",
+    "research artifact",
+    "paper evidence"
+  ]
+}

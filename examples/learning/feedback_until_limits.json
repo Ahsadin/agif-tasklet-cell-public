@@ -1,0 +1,38 @@
+{
+  "source": "user_correction",
+  "core_identity": {
+    "cell_id": "finance_doc_extractor_neural_v1",
+    "cell_version": "1.0.0",
+    "bundle_hash": "demo-bundle-hash-v1"
+  },
+  "runner_core_identity": {
+    "cell_id": "finance_doc_extractor_neural_v1",
+    "cell_version": "1.0.0",
+    "bundle_hash": "demo-bundle-hash-v1"
+  },
+  "proposal": {
+    "rule_id": "daily_limit_probe",
+    "rule_text": "Attempt update that exceeds daily learning compute cap."
+  },
+  "personalization": {
+    "rules": [
+      {
+        "rule_id": "daily_limit_probe",
+        "rule_text": "Attempt update that exceeds daily learning compute cap."
+      }
+    ]
+  },
+  "gate": {
+    "core_verifier_pass": true,
+    "local_regression_pass": true,
+    "limits": {
+      "proposed_state_size_bytes": 256,
+      "max_state_size_bytes": 4096,
+      "proposed_compute_units": 10,
+      "max_compute_units": 100,
+      "max_proposals_per_day": 5,
+      "max_learning_compute_per_day": 5,
+      "max_snapshots": 3
+    }
+  }
+}

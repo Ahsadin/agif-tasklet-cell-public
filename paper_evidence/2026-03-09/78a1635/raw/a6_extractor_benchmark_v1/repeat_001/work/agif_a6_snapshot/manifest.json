@@ -1,0 +1,60 @@
+{
+  "class_distribution": {
+    "invoice": 3,
+    "other_finance_doc": 1,
+    "receipt": 1
+  },
+  "created_at": "2026-03-09T17:18:42Z",
+  "dataset_id": "finance_extractor",
+  "dataset_version": "1.0.0",
+  "hashes": {
+    "edge": "0d14f169ad18e9a03dbe6be0878ea25a046d9c1f17bd0dd7eb51d9420c8c71d4",
+    "test": "c5f4e8e9953c6f50469cda7b9e5a9cf11c732113aaabf4af3c6ca4670d2b00ac",
+    "train": "01020067f90d1f47ce04efefa58f78ba6358c3f701ce58b8e259d7e41f4c819d",
+    "val": "d0bd9c789e8a1b541712fc77bd3710ab8c5844c1ebcd6498dc9efee10704ecb9"
+  },
+  "locale_distribution": {
+    "de-DE": 1,
+    "en-US": 3,
+    "es-ES": 1
+  },
+  "quality_summary": {
+    "approved_count": 3,
+    "needs_review_count": 2
+  },
+  "record_counts": {
+    "edge": 1,
+    "test": 1,
+    "train": 2,
+    "val": 1
+  },
+  "schema_version": "1.0.0",
+  "source_batches": {
+    "src_batch_2026_03_01": 2,
+    "src_batch_2026_03_02": 1,
+    "src_batch_2026_03_03": 1,
+    "src_batch_2026_03_04": 1
+  },
+  "split_files": {
+    "edge": {
+      "count": 1,
+      "hash": "0d14f169ad18e9a03dbe6be0878ea25a046d9c1f17bd0dd7eb51d9420c8c71d4",
+      "path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/projects/agif_full_product_v1/07_assets/datasets/sample_v1/edge.jsonl"
+    },
+    "test": {
+      "count": 1,
+      "hash": "c5f4e8e9953c6f50469cda7b9e5a9cf11c732113aaabf4af3c6ca4670d2b00ac",
+      "path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/projects/agif_full_product_v1/07_assets/datasets/sample_v1/test.jsonl"
+    },
+    "train": {
+      "count": 2,
+      "hash": "01020067f90d1f47ce04efefa58f78ba6358c3f701ce58b8e259d7e41f4c819d",
+      "path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/projects/agif_full_product_v1/07_assets/datasets/sample_v1/train.jsonl"
+    },
+    "val": {
+      "count": 1,
+      "hash": "d0bd9c789e8a1b541712fc77bd3710ab8c5844c1ebcd6498dc9efee10704ecb9",
+      "path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/projects/agif_full_product_v1/07_assets/datasets/sample_v1/val.jsonl"
+    }
+  }
+}

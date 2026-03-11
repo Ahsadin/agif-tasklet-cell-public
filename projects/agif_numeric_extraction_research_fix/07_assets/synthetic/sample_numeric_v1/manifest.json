@@ -1,0 +1,20 @@
+{
+  "counts": {
+    "edge": 4,
+    "test": 6,
+    "train": 12,
+    "val": 6
+  },
+  "dataset_id": "synthetic_numeric_v1",
+  "doc_types": [
+    "invoice",
+    "receipt"
+  ],
+  "locales": [
+    "en-US",
+    "de-DE",
+    "es-ES"
+  ],
+  "schema_version": "1.0.0",
+  "seed": 4045
+}

@@ -1,0 +1,36 @@
+{
+  "config_version": "reasoning_steps_v1",
+  "engine_version": "v3",
+  "steps": [
+    {
+      "id": "extract_numerics",
+      "description": "Extract deterministic numeric evidence from OCR text.",
+      "timeout_ms": 100,
+      "enabled": true
+    },
+    {
+      "id": "verify_arithmetic",
+      "description": "Verify subtotal + tax equals grand total within tolerance.",
+      "timeout_ms": 50,
+      "enabled": true
+    },
+    {
+      "id": "classify_vat_rate",
+      "description": "Classify VAT rate by deterministic heuristic bands.",
+      "timeout_ms": 100,
+      "enabled": true
+    },
+    {
+      "id": "apply_memory_correction",
+      "description": "Apply bounded corrections from read-only memory context.",
+      "timeout_ms": 50,
+      "enabled": true
+    },
+    {
+      "id": "validate_output_schema",
+      "description": "Validate extractor output contract without crashing pipeline.",
+      "timeout_ms": 50,
+      "enabled": true
+    }
+  ]
+}

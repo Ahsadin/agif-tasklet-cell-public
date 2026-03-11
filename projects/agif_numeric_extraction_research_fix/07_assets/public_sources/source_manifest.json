@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "retrieved_on": "2026-03-09",
+  "sources": [
+    {
+      "source_id": "public_invoices_receipts_pt_zenodo_7213544",
+      "kind": "mixed_invoices_receipts",
+      "title": "Dataset of personal invoices and receipts including annotation of relevant fields",
+      "url": "https://zenodo.org/records/7213544",
+      "license": "CC-BY-4.0",
+      "verified_scope": "web-verified",
+      "notes": "190 invoice/receipt images with annotation files. Useful as a small public benchmark source for total/tax/date/reference fields."
+    },
+    {
+      "source_id": "public_receipts_cord",
+      "kind": "receipt_dataset",
+      "title": "CORD: A Consolidated Receipt Dataset for Post-OCR Parsing",
+      "url": "https://github.com/clovaai/cord",
+      "license": "CC-BY-4.0",
+      "verified_scope": "web-verified",
+      "notes": "Receipt-focused dataset with structured total/subtotal/tax-style labels. Language is not within the final claim boundary, so use for breadth and structure testing rather than direct locale proof."
+    },
+    {
+      "source_id": "public_invoices_fatura",
+      "kind": "invoice_dataset",
+      "title": "FATURA Dataset",
+      "url": "https://zenodo.org/records/8261508",
+      "license": "CC-BY-4.0",
+      "verified_scope": "web-verified",
+      "notes": "10,000 generated invoice images with JSON annotations. Good public invoice-structure source; synthetic by design, so not a replacement for private real-doc validation."
+    }
+  ]
+}

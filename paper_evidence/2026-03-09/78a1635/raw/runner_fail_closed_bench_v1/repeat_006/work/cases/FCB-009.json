@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_MANIFEST_SCHEMA_INVALID",
+  "case_id": "FCB-009",
+  "category": "schema",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_006/work/bundles/FCB-009.cell"
+  ],
+  "description": "Manifest missing id",
+  "elapsed_ms": 91.02558300946839,
+  "expected_codes": [
+    "BUNDLE_MANIFEST_SCHEMA_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_MANIFEST_SCHEMA_INVALID\",\"message\":\"Bundle manifest schema invalid: manifest.id missing\"}}\n",
+  "unsafe_allow": false
+}

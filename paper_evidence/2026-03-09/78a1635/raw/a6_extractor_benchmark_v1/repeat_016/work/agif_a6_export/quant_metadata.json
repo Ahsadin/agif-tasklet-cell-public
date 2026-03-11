@@ -1,0 +1,69 @@
+{
+  "dataset_manifest_hash": "47552816a5d72ff345fb71c1a12fe2d96caccb23aee549b34452cf7e195a0b4f",
+  "quant_config_hash": "bceeee81aa9888ac373d167436c419bb795c83d0a0dd491a86c679664d746118",
+  "quant_mode": "int8_symmetric",
+  "router_encoding_mode": "learned_router_head_v1",
+  "router_head": {
+    "bias": [
+      -2.233048,
+      -2.609438,
+      -1.609438
+    ],
+    "bias_divisor": 32.0,
+    "feature_names": [
+      "has_invoice_token",
+      "has_receipt_token",
+      "has_tax_token",
+      "has_total_token",
+      "ap_context_hint",
+      "expense_context_hint"
+    ],
+    "labels": [
+      "accounts_payable_invoice",
+      "expense_receipt",
+      "other_finance_doc"
+    ],
+    "weight_divisor": 64.0,
+    "weights": [
+      [
+        1.0,
+        0.0,
+        0.666667,
+        1.0,
+        1.0,
+        0.0
+      ],
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "router_head_length": 21,
+  "run_id": "run_b59fc964e3d514b6",
+  "run_manifest_hash": "ff0bc48e13b5764fd89b93537d2eba6329581235090bc4b79d48afa136fa684b",
+  "scale": 0.015625,
+  "schema_version": "1.0.0",
+  "seed": 4045,
+  "stats": {
+    "max_float": 1.0,
+    "max_q": 64,
+    "min_float": 0.0,
+    "min_q": -84
+  },
+  "tensor_length": 256,
+  "tensor_name": "router_extractor_head",
+  "zero_point": 0
+}

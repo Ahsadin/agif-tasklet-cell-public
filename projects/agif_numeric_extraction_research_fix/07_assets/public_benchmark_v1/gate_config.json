@@ -1,0 +1,15 @@
+{
+  "min_routing_accuracy": 0.95,
+  "min_currency_accuracy": 0.95,
+  "min_vendor_hit_rate": 0.95,
+  "max_grand_total_mae": 0.05,
+  "max_tax_total_mae": 0.05,
+  "max_subtotal_mae": 0.05,
+  "max_arithmetic_error": 0.05,
+  "min_numeric_grounding_rate": 1.0,
+  "max_abstain_rate": 0.0,
+  "max_p95_latency_ms": 250,
+  "max_memory_mb": 64,
+  "min_confidence": 0.55,
+  "require_determinism": true
+}

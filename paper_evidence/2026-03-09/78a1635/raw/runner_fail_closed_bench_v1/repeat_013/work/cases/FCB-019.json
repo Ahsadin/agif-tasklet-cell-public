@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_SYMLINK_NOT_ALLOWED",
+  "case_id": "FCB-019",
+  "category": "archive_paths",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_013/work/bundles/FCB-019.cell"
+  ],
+  "description": "Symlink entry included",
+  "elapsed_ms": 35.5719159997534,
+  "expected_codes": [
+    "BUNDLE_SYMLINK_NOT_ALLOWED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_SYMLINK_NOT_ALLOWED\",\"message\":\"Bundle contains symlink entry: links/logic_link\"}}\n",
+  "unsafe_allow": false
+}

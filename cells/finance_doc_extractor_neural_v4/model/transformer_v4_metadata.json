@@ -1,0 +1,34 @@
+{
+  "artifacts": {
+    "onnx_hash": "0c7674e338a2cc8da4fcb3137787f75916059920a0e02730ad4f3a4c79af7a70",
+    "onnx_path": "cells/finance_doc_extractor_neural_v4/model/transformer_v4.onnx"
+  },
+  "export_id": "v4_export_7a19f6857f07e514",
+  "golden_validation": {
+    "cases_passed": 10,
+    "cases_total": 10,
+    "golden_cases_path": "not_shipped_in_public_repo"
+  },
+  "model_profile": "tiny_transformer_int8_cpu",
+  "model_version": "v4",
+  "quantization": {
+    "mode": "dynamic_int8",
+    "scale": 0.00786356538179404,
+    "tensor_length": 256,
+    "zero_point": 0
+  },
+  "runtime": {
+    "allow_cloud": false,
+    "allow_gpu": false,
+    "provider": "CPUExecutionProvider"
+  },
+  "selected_base_model": "tinybert",
+  "stats": {
+    "l2_norm": 9.521716375997192,
+    "max_float": 0.9949393623515703,
+    "mean_abs": 0.5218116689243765,
+    "min_float": -0.998672803487843
+  },
+  "training_hash": "1092b5bbe7a7773c439b80830bfd757719f7bbee0f4fbdb97a2856c56cf9a5d9",
+  "training_run_id": "v4_train_c92ddf999753ed88"
+}

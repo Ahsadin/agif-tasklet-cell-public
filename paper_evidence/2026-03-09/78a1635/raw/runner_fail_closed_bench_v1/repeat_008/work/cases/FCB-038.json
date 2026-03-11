@@ -1,0 +1,24 @@
+{
+  "actual_code": "INPUT_INVALID_JSON",
+  "case_id": "FCB-038",
+  "category": "runtime_input",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "run",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/cells/finance_doc_extractor_neural_v1.cell",
+    "--input",
+    "{bad json"
+  ],
+  "description": "Invalid run input JSON rejected",
+  "elapsed_ms": 105.57112499373034,
+  "expected_codes": [
+    "INPUT_INVALID_JSON"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 2,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"INPUT_INVALID_JSON\",\"message\":\"Run input must be valid JSON: input JSON invalid at line 1 column 2\"}}\n",
+  "unsafe_allow": false
+}

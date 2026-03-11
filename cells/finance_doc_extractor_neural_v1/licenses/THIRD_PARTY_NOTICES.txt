@@ -1,0 +1,5 @@
+Finance Document Extractor Neural v1 bundle
+
+This bundle is a project fixture for conformance testing under ISSUE-045.
+No external model weights are distributed in this fixture.
+License notice placeholder: MIT.

@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_id": "public_numeric_extraction_benchmark_v1",
+  "created_on": "2026-03-09",
+  "scope": {
+    "doc_types": [
+      "invoice",
+      "receipt"
+    ],
+    "locales": [
+      "en-US",
+      "de-DE",
+      "es-ES"
+    ],
+    "numeric_fields": [
+      "grand_total",
+      "tax_total",
+      "subtotal"
+    ]
+  },
+  "public_cases_ref": "projects/agif_numeric_extraction_research_fix/07_assets/public_benchmark_v1/cases.json",
+  "gate_config_ref": "projects/agif_numeric_extraction_research_fix/07_assets/public_benchmark_v1/gate_config.json",
+  "case_count": 6,
+  "notes": [
+    "This is the frozen public seed benchmark currently used for externally checkable numeric extraction proof.",
+    "It intentionally stays separate from the private Lexware holdout and from future public/open corpus expansion."
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "bundle_hash": "d490b8f6a0590364bfa303120a3328ff17b6700c9778aa4c6265cc30c0c8765b",
+  "bundle_path": "cells/finance_doc_extractor_neural_v1.cell",
+  "cell_id": "cell.finance_doc_extractor_neural_v1",
+  "cell_version": "1.0.0",
+  "comparison": {
+    "mode": "bounded",
+    "numeric_tolerance": 0.001
+  },
+  "expected_output": {
+    "account_context": {
+      "cost_center": "CC-RUN",
+      "ledger_profile": "ap_default",
+      "vendor_hint": "Run Vendor"
+    },
+    "confidence": 0.97,
+    "currency_hint": "USD",
+    "doc_id": "doc-run-001",
+    "extracted_fields": {
+      "currency": "USD",
+      "due_date": "2026-03-30",
+      "grand_total": 1320.0,
+      "invoice_date": "2026-02-28",
+      "invoice_number": "RUN-001",
+      "subtotal": 1200.0,
+      "tax_total": 120.0,
+      "vendor_name": "Run Vendor"
+    },
+    "import_event": "on_import",
+    "locale": "en-US",
+    "ocr_text": "Invoice RUN-001 subtotal 1200 tax 120 total 1320",
+    "ranking": [
+      {
+        "candidate": "invoice",
+        "reason": "totals and invoice id pattern",
+        "score": 0.97
+      },
+      {
+        "candidate": "receipt",
+        "reason": "fallback",
+        "score": 0.03
+      }
+    ],
+    "routing_label": "accounts_payable_invoice",
+    "source_type": "invoice",
+    "warnings": []
+  },
+  "expected_result_hash": "dd3b167874d8582c4b63b92a366ad11dc5af573b6eacfa0100e4d2e919ab058b",
+  "input_hash": "dd3b167874d8582c4b63b92a366ad11dc5af573b6eacfa0100e4d2e919ab058b",
+  "input_json": {
+    "account_context": {
+      "cost_center": "CC-RUN",
+      "ledger_profile": "ap_default",
+      "vendor_hint": "Run Vendor"
+    },
+    "confidence": 0.97,
+    "currency_hint": "USD",
+    "doc_id": "doc-run-001",
+    "extracted_fields": {
+      "currency": "USD",
+      "due_date": "2026-03-30",
+      "grand_total": 1320.0,
+      "invoice_date": "2026-02-28",
+      "invoice_number": "RUN-001",
+      "subtotal": 1200.0,
+      "tax_total": 120.0,
+      "vendor_name": "Run Vendor"
+    },
+    "import_event": "on_import",
+    "locale": "en-US",
+    "ocr_text": "Invoice RUN-001 subtotal 1200 tax 120 total 1320",
+    "ranking": [
+      {
+        "candidate": "invoice",
+        "reason": "totals and invoice id pattern",
+        "score": 0.97
+      },
+      {
+        "candidate": "receipt",
+        "reason": "fallback",
+        "score": 0.03
+      }
+    ],
+    "routing_label": "accounts_payable_invoice",
+    "source_type": "invoice",
+    "warnings": []
+  },
+  "policy": "policy-preset-balanced-v1",
+  "policy_hash": "3dd286bfbc7b133271d1d0873bfe64f289c86604a1bbca03760d3e8ad59935f7",
+  "policy_preset": "balanced",
+  "replay_id": "replay-cell-finance_doc_extractor_neural_v1-dd3b167874d8",
+  "replay_status": {
+    "code": "REPLAY_PASS",
+    "evidence": {
+      "bundle_hash": "d490b8f6a0590364bfa303120a3328ff17b6700c9778aa4c6265cc30c0c8765b",
+      "bundle_path": "cells/finance_doc_extractor_neural_v1.cell",
+      "input_hash": "dd3b167874d8582c4b63b92a366ad11dc5af573b6eacfa0100e4d2e919ab058b",
+      "policy_hash": "3dd286bfbc7b133271d1d0873bfe64f289c86604a1bbca03760d3e8ad59935f7",
+      "policy_preset": "balanced",
+      "runner_version": "runner-v0.1"
+    },
+    "expected_result_hash": "dd3b167874d8582c4b63b92a366ad11dc5af573b6eacfa0100e4d2e919ab058b",
+    "mismatch_reason": "",
+    "mode": "bounded",
+    "pass": true,
+    "result_hash": "dd3b167874d8582c4b63b92a366ad11dc5af573b6eacfa0100e4d2e919ab058b",
+    "tolerance": {
+      "delta_paths": [],
+      "max_numeric_delta": 0.0,
+      "numeric_tolerance": 0.001
+    }
+  },
+  "runner_version": "runner-v0.1"
+}

@@ -1,0 +1,33 @@
+{
+  "source": "user_correction",
+  "core_identity": {
+    "cell_id": "finance_doc_extractor_neural_v1",
+    "cell_version": "1.0.0",
+    "bundle_hash": "demo-bundle-hash-v1"
+  },
+  "proposal": {
+    "rule_id": "closing_phrase",
+    "rule_text": "Use 'Best regards' as the default export closing."
+  },
+  "personalization": {
+    "rules": [
+      {
+        "rule_id": "closing_phrase",
+        "rule_text": "Use 'Best regards' as the default export closing."
+      }
+    ]
+  },
+  "gate": {
+    "core_verifier_pass": true,
+    "local_regression_pass": true,
+    "limits": {
+      "proposed_state_size_bytes": 128,
+      "max_state_size_bytes": 2048,
+      "proposed_compute_units": 3,
+      "max_compute_units": 100,
+      "max_proposals_per_day": 10,
+      "max_learning_compute_per_day": 100,
+      "max_snapshots": 5
+    }
+  }
+}

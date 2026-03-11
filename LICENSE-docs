@@ -1,0 +1,25 @@
+Creative Commons Attribution 4.0 International
+
+The documentation, paper-support text, benchmark notes, evidence summaries,
+figures, and other non-software materials in this repository are licensed under
+the Creative Commons Attribution 4.0 International License (CC BY 4.0), unless a
+file says otherwise.
+
+License text and terms:
+https://creativecommons.org/licenses/by/4.0/
+
+This license file applies by default to content under:
+
+- `docs/`
+- `evidence/`
+- `paper_evidence/`
+- `projects/**/PROJECT_README.md`
+- `projects/**/DECISIONS.md`
+- `projects/**/CHANGELOG.md`
+- `projects/**/01_plan/`
+- `projects/**/07_assets/README.md`
+
+It does not replace the Apache-2.0 license that applies to code and executable
+artifacts in this repository.
+
+Trademark rights are not granted by CC BY 4.0. See `TRADEMARKS.md`.

@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_MANIFEST_SCHEMA_INVALID",
+  "case_id": "FCB-010",
+  "category": "schema",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_028/work/bundles/FCB-010.cell"
+  ],
+  "description": "Manifest execution_kind invalid",
+  "elapsed_ms": 89.07916699536145,
+  "expected_codes": [
+    "BUNDLE_MANIFEST_SCHEMA_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_MANIFEST_SCHEMA_INVALID\",\"message\":\"Bundle manifest schema invalid: manifest.runner_compat.execution_kind must be one of: wasi,native\"}}\n",
+  "unsafe_allow": false
+}

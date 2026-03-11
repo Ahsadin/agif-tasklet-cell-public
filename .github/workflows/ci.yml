@@ -1,0 +1,62 @@
+name: Public Repo Hygiene
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify excluded paths and junk are absent
+        run: |
+          set -euo pipefail
+          test ! -e projects/agif_full_product_v1
+          if find . \( -path './.git' -o -path './paper_evidence' -o -path './paper_evidence/*' \) -prune -o -type d \( -name tmp -o -name .tmp -o -name .venv -o -name __pycache__ \) -print | grep -q .; then
+            echo "Found excluded temp/cache directories"
+            exit 1
+          fi
+          if find . \( -path './.git' -o -path './paper_evidence' -o -path './paper_evidence/*' \) -prune -o -type f \( -name '*.zip' -o -name '.DS_Store' \) -print | grep -q .; then
+            echo "Found excluded archive/junk files"
+            exit 1
+          fi
+
+      - name: Scan for sensitive markers outside recorded evidence
+        run: |
+          set -euo pipefail
+          SCAN_PATHS="README.md CHANGELOG.md PUBLICATION_SCOPE.md TRADEMARKS.md AGENTS.md docs cells examples fixtures intelligence projects runner sdk evidence"
+          if grep -RIn "BEGIN PRIVATE KEY" ${SCAN_PATHS}; then
+            echo "Private key marker found"
+            exit 1
+          fi
+          if grep -RInE 'community\.token|expired\.token|pro\.token' ${SCAN_PATHS}; then
+            echo "Token artifact marker found"
+            exit 1
+          fi
+          if grep -RIn 'projects/agif_full_product_v1' ${SCAN_PATHS}; then
+            echo "Private product path leaked into public files"
+            exit 1
+          fi
+          if grep -RInE '(/Users/|/private/tmp/)' ${SCAN_PATHS}; then
+            echo "Absolute local path leaked into public files"
+            exit 1
+          fi
+
+      - name: Verify publication metadata
+        run: |
+          set -euo pipefail
+          test -f LICENSE
+          test -f LICENSE-docs
+          test -f TRADEMARKS.md
+          test -f PUBLICATION_SCOPE.md
+          test -f CITATION.cff
+          test -f .zenodo.json
+          grep -q 'Apache-2.0' README.md
+          grep -q 'CC BY 4.0' README.md
+          grep -q 'TRADEMARKS.md' README.md

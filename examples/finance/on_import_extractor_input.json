@@ -1,0 +1,38 @@
+{
+  "doc_id": "doc-run-001",
+  "source_type": "invoice",
+  "import_event": "on_import",
+  "ocr_text": "Invoice RUN-001 subtotal 1200 tax 120 total 1320",
+  "locale": "en-US",
+  "currency_hint": "USD",
+  "account_context": {
+    "ledger_profile": "ap_default",
+    "cost_center": "CC-RUN",
+    "vendor_hint": "Run Vendor"
+  },
+  "routing_label": "accounts_payable_invoice",
+  "confidence": 0.97,
+  "extracted_fields": {
+    "vendor_name": "Run Vendor",
+    "invoice_number": "RUN-001",
+    "invoice_date": "2026-02-28",
+    "due_date": "2026-03-30",
+    "currency": "USD",
+    "subtotal": 1200.0,
+    "tax_total": 120.0,
+    "grand_total": 1320.0
+  },
+  "warnings": [],
+  "ranking": [
+    {
+      "candidate": "invoice",
+      "score": 0.97,
+      "reason": "totals and invoice id pattern"
+    },
+    {
+      "candidate": "receipt",
+      "score": 0.03,
+      "reason": "fallback"
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+[
+  {
+    "input": {
+      "doc_id": "vat-001",
+      "currency": "USD",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.19,
+          "taxable_base": 1000.0,
+          "tax_amount": 190.0,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 1000.0,
+      "tax_total": 190.0,
+      "grand_total": 1190.0,
+      "computed_totals": {
+        "expected_tax_total": 190.0,
+        "expected_grand_total": 1190.0
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [],
+      "status_code": "OK"
+    },
+    "expected_output": {
+      "doc_id": "vat-001",
+      "currency": "USD",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.19,
+          "taxable_base": 1000.0,
+          "tax_amount": 190.0,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 1000.0,
+      "tax_total": 190.0,
+      "grand_total": 1190.0,
+      "computed_totals": {
+        "expected_tax_total": 190.0,
+        "expected_grand_total": 1190.0
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [],
+      "status_code": "OK"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "vat-002",
+      "currency": "EUR",
+      "rounding_profile": "bankers_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.21,
+          "taxable_base": 120.35,
+          "tax_amount": 25.27,
+          "line_id": "L1"
+        },
+        {
+          "rate": 0.10,
+          "taxable_base": 50.4,
+          "tax_amount": 5.04,
+          "line_id": "L2"
+        }
+      ],
+      "subtotal": 170.75,
+      "tax_total": 30.31,
+      "grand_total": 201.06,
+      "computed_totals": {
+        "expected_tax_total": 30.31,
+        "expected_grand_total": 201.06
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "bankers_rounding_applied"
+      ],
+      "status_code": "OK"
+    },
+    "expected_output": {
+      "doc_id": "vat-002",
+      "currency": "EUR",
+      "rounding_profile": "bankers_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.21,
+          "taxable_base": 120.35,
+          "tax_amount": 25.27,
+          "line_id": "L1"
+        },
+        {
+          "rate": 0.10,
+          "taxable_base": 50.4,
+          "tax_amount": 5.04,
+          "line_id": "L2"
+        }
+      ],
+      "subtotal": 170.75,
+      "tax_total": 30.31,
+      "grand_total": 201.06,
+      "computed_totals": {
+        "expected_tax_total": 30.31,
+        "expected_grand_total": 201.06
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "bankers_rounding_applied"
+      ],
+      "status_code": "OK"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "vat-003",
+      "currency": "USD",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.08,
+          "taxable_base": 500.0,
+          "tax_amount": 40.0,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 500.0,
+      "tax_total": 39.0,
+      "grand_total": 539.0,
+      "computed_totals": {
+        "expected_tax_total": 40.0,
+        "expected_grand_total": 540.0
+      },
+      "vat_status": "MISMATCH",
+      "mismatch_flags": [
+        "TAX_TOTAL_MISMATCH",
+        "GRAND_TOTAL_MISMATCH"
+      ],
+      "rounding_notes": [],
+      "status_code": "REVIEW_REQUIRED"
+    },
+    "expected_output": {
+      "doc_id": "vat-003",
+      "currency": "USD",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.08,
+          "taxable_base": 500.0,
+          "tax_amount": 40.0,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 500.0,
+      "tax_total": 39.0,
+      "grand_total": 539.0,
+      "computed_totals": {
+        "expected_tax_total": 40.0,
+        "expected_grand_total": 540.0
+      },
+      "vat_status": "MISMATCH",
+      "mismatch_flags": [
+        "TAX_TOTAL_MISMATCH",
+        "GRAND_TOTAL_MISMATCH"
+      ],
+      "rounding_notes": [],
+      "status_code": "REVIEW_REQUIRED"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "vat-004",
+      "currency": "CHF",
+      "rounding_profile": "cash_round_0_05",
+      "tax_lines": [
+        {
+          "rate": 0.077,
+          "taxable_base": 100.0,
+          "tax_amount": 7.7,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 100.0,
+      "tax_total": 7.7,
+      "grand_total": 107.7,
+      "computed_totals": {
+        "expected_tax_total": 7.7,
+        "expected_grand_total": 107.7
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "cash_rounding_profile_active"
+      ],
+      "status_code": "OK"
+    },
+    "expected_output": {
+      "doc_id": "vat-004",
+      "currency": "CHF",
+      "rounding_profile": "cash_round_0_05",
+      "tax_lines": [
+        {
+          "rate": 0.077,
+          "taxable_base": 100.0,
+          "tax_amount": 7.7,
+          "line_id": "L1"
+        }
+      ],
+      "subtotal": 100.0,
+      "tax_total": 7.7,
+      "grand_total": 107.7,
+      "computed_totals": {
+        "expected_tax_total": 7.7,
+        "expected_grand_total": 107.7
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "cash_rounding_profile_active"
+      ],
+      "status_code": "OK"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "vat-005",
+      "currency": "EUR",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.05,
+          "taxable_base": 200.0,
+          "tax_amount": 10.0,
+          "line_id": "L1"
+        },
+        {
+          "rate": 0.21,
+          "taxable_base": 30.0,
+          "tax_amount": 6.3,
+          "line_id": "L2"
+        }
+      ],
+      "subtotal": 230.0,
+      "tax_total": 16.3,
+      "grand_total": 246.3,
+      "computed_totals": {
+        "expected_tax_total": 16.3,
+        "expected_grand_total": 246.3
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "mixed_rate_validation"
+      ],
+      "status_code": "OK"
+    },
+    "expected_output": {
+      "doc_id": "vat-005",
+      "currency": "EUR",
+      "rounding_profile": "half_up_2dp",
+      "tax_lines": [
+        {
+          "rate": 0.05,
+          "taxable_base": 200.0,
+          "tax_amount": 10.0,
+          "line_id": "L1"
+        },
+        {
+          "rate": 0.21,
+          "taxable_base": 30.0,
+          "tax_amount": 6.3,
+          "line_id": "L2"
+        }
+      ],
+      "subtotal": 230.0,
+      "tax_total": 16.3,
+      "grand_total": 246.3,
+      "computed_totals": {
+        "expected_tax_total": 16.3,
+        "expected_grand_total": 246.3
+      },
+      "vat_status": "MATCHED",
+      "mismatch_flags": [],
+      "rounding_notes": [
+        "mixed_rate_validation"
+      ],
+      "status_code": "OK"
+    }
+  }
+]

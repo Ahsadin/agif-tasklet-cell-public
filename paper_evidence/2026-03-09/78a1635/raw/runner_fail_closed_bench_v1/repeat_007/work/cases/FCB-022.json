@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_TOTAL_SIZE_EXCEEDED",
+  "case_id": "FCB-022",
+  "category": "limits",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_007/work/bundles/FCB-022.cell"
+  ],
+  "description": "Total uncompressed size exceeds limit",
+  "elapsed_ms": 36.873832999845035,
+  "expected_codes": [
+    "BUNDLE_TOTAL_SIZE_EXCEEDED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_TOTAL_SIZE_EXCEEDED\",\"message\":\"Bundle total uncompressed size exceeds limit: 4881299>4194304\"}}\n",
+  "unsafe_allow": false
+}

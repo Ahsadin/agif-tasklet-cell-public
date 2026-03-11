@@ -1,0 +1,23 @@
+{
+  "actual_code": "BUNDLE_MANIFEST_SCHEMA_INVALID",
+  "case_id": "FCB-025",
+  "category": "licensing",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_021/work/bundles/FCB-025.cell"
+  ],
+  "description": "Licensing SPDX metadata invalid",
+  "elapsed_ms": 90.00870899762958,
+  "expected_codes": [
+    "BUNDLE_MANIFEST_SCHEMA_INVALID",
+    "LICENSING_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_MANIFEST_SCHEMA_INVALID\",\"message\":\"Bundle manifest schema invalid: manifest.licensing.spdx identifier must be string or array\"}}\n",
+  "unsafe_allow": false
+}

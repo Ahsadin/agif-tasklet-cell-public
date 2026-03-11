@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_VERIFIER_FAILED",
+  "case_id": "FCB-016",
+  "category": "verifier",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_006/work/bundles/FCB-016.cell"
+  ],
+  "description": "Verifier case fails expected output",
+  "elapsed_ms": 247.52612499287352,
+  "expected_codes": [
+    "BUNDLE_VERIFIER_FAILED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_VERIFIER_FAILED\",\"message\":\"Bundle verifier case failed: verifier/tests.json case[0] failed canonical_json comparison\"}}\n",
+  "unsafe_allow": false
+}

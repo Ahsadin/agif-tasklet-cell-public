@@ -1,0 +1,24 @@
+{
+  "actual_code": "ROLLBACK_REJECTED",
+  "case_id": "FCB-031",
+  "category": "rollback",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/fixtures/rollback/older_version.cell"
+  ],
+  "description": "Rollback fixture rejected in strict mode",
+  "elapsed_ms": 196.19904199498706,
+  "expected_codes": [
+    "ROLLBACK_REJECTED",
+    "ROLLBACK_STATE_WRITE_FAILED",
+    "ROLLBACK_STATE_READ_FAILED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"ROLLBACK_REJECTED\",\"message\":\"Validate rejected by anti-rollback policy: rollback detected for cell.finance_doc_extractor_neural_v1: candidate version 0.9.0 is older than trusted 1.0.0\"}}\n",
+  "unsafe_allow": false
+}

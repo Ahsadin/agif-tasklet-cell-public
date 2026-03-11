@@ -1,0 +1,24 @@
+{
+  "actual_code": "POLICY_INVALID",
+  "case_id": "FCB-032",
+  "category": "policy",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/cells/finance_doc_extractor_neural_v1.cell",
+    "--policy",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_018/work/policy/invalid_policy.json"
+  ],
+  "description": "Invalid policy JSON rejected",
+  "elapsed_ms": 29.67370800615754,
+  "expected_codes": [
+    "POLICY_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 2,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"POLICY_INVALID\",\"message\":\"Validation policy invalid: policy JSON invalid at line 2 column 1\"}}\n",
+  "unsafe_allow": false
+}

@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_HASH_MANIFEST_INVALID",
+  "case_id": "FCB-003",
+  "category": "hash_tamper",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_009/work/bundles/FCB-003.cell"
+  ],
+  "description": "Invalid hash manifest JSON",
+  "elapsed_ms": 63.62612500379328,
+  "expected_codes": [
+    "BUNDLE_HASH_MANIFEST_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_HASH_MANIFEST_INVALID\",\"message\":\"Bundle hash manifest is not valid JSON/text: hashes/sha256.json invalid JSON at line 2 column 1\"}}\n",
+  "unsafe_allow": false
+}

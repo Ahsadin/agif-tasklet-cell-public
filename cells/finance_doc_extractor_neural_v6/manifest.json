@@ -1,0 +1,52 @@
+{
+  "cell_format_version": "0.1.0",
+  "id": "cell.finance_doc_extractor_neural_v6",
+  "name": "Finance Document Extractor Neural v6",
+  "version": "6.0.0",
+  "runner_compat": {
+    "runner_api_version": "runner-v0.1",
+    "execution_kind": "wasi"
+  },
+  "determinism": {
+    "mode": "strict",
+    "seed": 6060
+  },
+  "limits": {
+    "max_wall_ms": 1000,
+    "max_steps": 2000,
+    "max_memory_mb": 256,
+    "max_output_bytes": 65536,
+    "max_tool_calls": 3,
+    "fuel_limit": 100000000
+  },
+  "contracts": {
+    "input_schema_path": "schemas/input.schema.json",
+    "output_schema_path": "schemas/output.schema.json"
+  },
+  "verifier": {
+    "tests_path": "verifier/tests.json",
+    "comparison": {
+      "mode": "canonical_json"
+    }
+  },
+  "capabilities": {
+    "network": false,
+    "filesystem": {
+      "preopens": []
+    }
+  },
+  "licensing": {
+    "spdx_ids": [
+      "MIT"
+    ],
+    "notices_path": "licenses/THIRD_PARTY_NOTICES.txt"
+  },
+  "model": {
+    "runtime": "wasm_candle_int8",
+    "wasm_inference": true,
+    "metadata_path": "model/wasm_runtime_metadata.json"
+  },
+  "integrity": {
+    "hash_manifest_path": "hashes/sha256.json"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "artifacts": {
+    "model_int8_hash": "b533a6e6eb48a67efb673a5deda2226f6a3ae8ceb1ba3961ed8c177e8ac117b7",
+    "model_int8_path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/a6_extractor_benchmark_v1/repeat_008/work/agif_a6_export/model_int8.bin",
+    "quant_metadata_hash": "521cc6618053b74cc8e90de07f83fe006805a72968e2bac76fce4ab2e7c858cb",
+    "quant_metadata_path": "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/a6_extractor_benchmark_v1/repeat_008/work/agif_a6_export/quant_metadata.json"
+  },
+  "dataset": {
+    "dataset_id": "finance_extractor",
+    "dataset_manifest_hash": "4677636248bb4480500d6075b61412e8bb221db5ad52f84f0db80eb2506c1d8a",
+    "dataset_version": "1.0.0"
+  },
+  "export": {
+    "quant_config_hash": "bceeee81aa9888ac373d167436c419bb795c83d0a0dd491a86c679664d746118",
+    "quant_mode": "int8_symmetric",
+    "router_encoding_mode": "learned_router_head_v1",
+    "target": "wasm_int8_flat",
+    "tensor_length": 256,
+    "tensor_name": "router_extractor_head"
+  },
+  "export_id": "export_a946bf26bd942a47",
+  "status": "completed",
+  "training": {
+    "run_id": "run_7d6dce897eea1e4f",
+    "run_manifest_hash": "9445c22c5d7d6bf88aea53c17a3cb92ba6ad033cf9da6dd5ffe81a377a3b2c3a",
+    "seed": 4045
+  }
+}

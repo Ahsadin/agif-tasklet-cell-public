@@ -1,0 +1,34 @@
+{
+  "doc_id": "dup-run-001",
+  "vendor_name": "Run Vendor",
+  "invoice_number": "RUN-VAL-001",
+  "invoice_date": "2026-02-28",
+  "grand_total": 1320.0,
+  "currency": "USD",
+  "content_hash": "sha256:run001",
+  "candidate_set": [
+    {
+      "doc_id": "hist-run-01",
+      "vendor_name": "Run Vendor",
+      "invoice_number": "RUN-VAL-001",
+      "invoice_date": "2026-02-28",
+      "grand_total": 1320.0,
+      "currency": "USD",
+      "content_hash": "sha256:run001"
+    }
+  ],
+  "duplicate_detected": true,
+  "duplicate_candidates": [
+    {
+      "doc_id": "hist-run-01",
+      "score": 1.0,
+      "match_level": "EXACT",
+      "reason": "content hash and id match"
+    }
+  ],
+  "match_reason_codes": [
+    "EXACT_CONTENT_HASH",
+    "EXACT_INVOICE_ID"
+  ],
+  "status_code": "DUPLICATE_BLOCK"
+}

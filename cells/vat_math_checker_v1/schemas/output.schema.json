@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "doc_id",
+    "currency",
+    "rounding_profile",
+    "tax_lines",
+    "subtotal",
+    "tax_total",
+    "grand_total",
+    "computed_totals",
+    "vat_status",
+    "mismatch_flags",
+    "rounding_notes",
+    "status_code"
+  ],
+  "properties": {
+    "doc_id": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "rounding_profile": {
+      "type": "string"
+    },
+    "tax_lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rate",
+          "taxable_base",
+          "tax_amount"
+        ],
+        "properties": {
+          "rate": {
+            "type": "number"
+          },
+          "taxable_base": {
+            "type": "number"
+          },
+          "tax_amount": {
+            "type": "number"
+          },
+          "line_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "subtotal": {
+      "type": "number"
+    },
+    "tax_total": {
+      "type": "number"
+    },
+    "grand_total": {
+      "type": "number"
+    },
+    "computed_totals": {
+      "type": "object",
+      "required": [
+        "expected_tax_total",
+        "expected_grand_total"
+      ],
+      "properties": {
+        "expected_tax_total": {
+          "type": "number"
+        },
+        "expected_grand_total": {
+          "type": "number"
+        }
+      }
+    },
+    "vat_status": {
+      "type": "string"
+    },
+    "mismatch_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rounding_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status_code": {
+      "type": "string"
+    }
+  }
+}

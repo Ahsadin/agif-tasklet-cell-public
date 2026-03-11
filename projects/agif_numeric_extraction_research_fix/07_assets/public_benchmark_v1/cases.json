@@ -1,0 +1,185 @@
+{
+  "suite_id": "a6_extractor_benchmark_v1",
+  "cases": [
+    {
+      "case_id": "A6-001",
+      "input": {
+        "doc_id": "a6-invoice-001",
+        "source_type": "invoice",
+        "import_event": "on_import",
+        "ocr_text": "INVOICE ACME-445 TOTAL 1190.00 TAX 190.00",
+        "locale": "en-US",
+        "currency_hint": "USD",
+        "account_context": {
+          "ledger_profile": "ap_default",
+          "cost_center": "CC-100",
+          "vendor_hint": "ACME"
+        }
+      },
+      "expected": {
+        "routing_label": "accounts_payable_invoice",
+        "currency": "USD",
+        "subtotal": 1000.0,
+        "tax_total": 190.0,
+        "grand_total": 1190.0,
+        "vendor_contains": "ACME",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "ocr",
+          "grand_total": "ocr"
+        }
+      }
+    },
+    {
+      "case_id": "A6-002",
+      "input": {
+        "doc_id": "a6-receipt-001",
+        "source_type": "receipt",
+        "import_event": "on_import",
+        "ocr_text": "RECEIPT CAFE 42.35 TIP 5.00",
+        "locale": "en-US",
+        "currency_hint": "USD",
+        "account_context": {
+          "ledger_profile": "expense_default",
+          "cost_center": "CC-TRAVEL",
+          "vendor_hint": "Cafe Midtown"
+        }
+      },
+      "expected": {
+        "routing_label": "expense_receipt",
+        "currency": "USD",
+        "subtotal": 42.35,
+        "tax_total": 0.0,
+        "grand_total": 42.35,
+        "vendor_contains": "Cafe",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "derived",
+          "grand_total": "ocr"
+        }
+      }
+    },
+    {
+      "case_id": "A6-003",
+      "input": {
+        "doc_id": "a6-invoice-002",
+        "source_type": "invoice",
+        "import_event": "on_import",
+        "ocr_text": "FACTURA V-778 TOTAL 238,00 IVA 38,00",
+        "locale": "es-ES",
+        "currency_hint": "EUR",
+        "account_context": {
+          "ledger_profile": "ap_emea",
+          "cost_center": "CC-MADRID",
+          "vendor_hint": "Proveedor SA"
+        }
+      },
+      "expected": {
+        "routing_label": "accounts_payable_invoice",
+        "currency": "EUR",
+        "subtotal": 200.0,
+        "tax_total": 38.0,
+        "grand_total": 238.0,
+        "vendor_contains": "Proveedor",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "ocr",
+          "grand_total": "ocr"
+        }
+      }
+    },
+    {
+      "case_id": "A6-004",
+      "input": {
+        "doc_id": "a6-receipt-002",
+        "source_type": "receipt",
+        "import_event": "on_import",
+        "ocr_text": "QUITTUNG TAXI 18,40",
+        "locale": "de-DE",
+        "currency_hint": "EUR",
+        "account_context": {
+          "ledger_profile": "expense_default",
+          "cost_center": "CC-BERLIN",
+          "vendor_hint": "Taxi Berlin"
+        }
+      },
+      "expected": {
+        "routing_label": "expense_receipt",
+        "currency": "EUR",
+        "subtotal": 18.4,
+        "tax_total": 0.0,
+        "grand_total": 18.4,
+        "vendor_contains": "Taxi",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "derived",
+          "grand_total": "ocr"
+        }
+      }
+    },
+    {
+      "case_id": "A6-005",
+      "input": {
+        "doc_id": "a6-invoice-003",
+        "source_type": "invoice",
+        "import_event": "on_import",
+        "ocr_text": "RECHNUNG NORD-880 GESAMT 299,90 MWST 47,89",
+        "locale": "de-DE",
+        "currency_hint": "EUR",
+        "account_context": {
+          "ledger_profile": "ap_default",
+          "cost_center": "CC-220",
+          "vendor_hint": "Nord GmbH"
+        }
+      },
+      "expected": {
+        "routing_label": "accounts_payable_invoice",
+        "currency": "EUR",
+        "subtotal": 252.01,
+        "tax_total": 47.89,
+        "grand_total": 299.9,
+        "vendor_contains": "Nord",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "ocr",
+          "grand_total": "ocr"
+        }
+      }
+    },
+    {
+      "case_id": "A6-006",
+      "input": {
+        "doc_id": "a6-invoice-004",
+        "source_type": "invoice",
+        "import_event": "on_import",
+        "ocr_text": "INVOICE DELTA-9007 AMOUNT DUE 440.00",
+        "locale": "en-US",
+        "currency_hint": "USD",
+        "account_context": {
+          "ledger_profile": "ap_default",
+          "cost_center": "CC-100",
+          "vendor_hint": "Delta Supplies"
+        }
+      },
+      "expected": {
+        "routing_label": "accounts_payable_invoice",
+        "currency": "USD",
+        "subtotal": 440.0,
+        "tax_total": 0.0,
+        "grand_total": 440.0,
+        "vendor_contains": "Delta",
+        "allow_abstain": false,
+        "evidence_sources": {
+          "subtotal": "derived",
+          "tax_total": "derived",
+          "grand_total": "ocr"
+        }
+      }
+    }
+  ]
+}

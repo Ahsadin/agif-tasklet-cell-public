@@ -1,0 +1,12 @@
+{
+  "licenses/THIRD_PARTY_NOTICES.txt": "4615402575569066c21419af33d3b981d64cc074a955ec940b1531aad96cb47b",
+  "logic/logic.wasm": "93a44bbb96c751218e4c00d479e4c14358122a389acca16205b1e4d0dc5f9476",
+  "manifest.json": "33a66c6a421e439218804841bda20e5c51b665381538eeed19641eccb142ea7d",
+  "model/README.md": "52da3594623dcd4e53f87ef7ad4a95e72b4b9ddfd41cfca8e863952db320d82c",
+  "model/export_manifest.json": "fd3d442813c02a7348d764036f27a1929dc0827fd8fdbc62aa43390a0f28b040",
+  "model/transformer_v4.onnx": "0c7674e338a2cc8da4fcb3137787f75916059920a0e02730ad4f3a4c79af7a70",
+  "model/transformer_v4_metadata.json": "0c202de9a38deebbd5827beef246c6030d62eddf8b59b4fa4d14cb33d72d81e4",
+  "schemas/input.schema.json": "45dec7afb1a92195db9d57d6e92fed966bb76613db87ef5bd3b54b4fd36d0932",
+  "schemas/output.schema.json": "45dec7afb1a92195db9d57d6e92fed966bb76613db87ef5bd3b54b4fd36d0932",
+  "verifier/tests.json": "15266095b15221e334b5b96de157e8e0911f78603eb67916d63840a883d21a98"
+}

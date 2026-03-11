@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_COMPRESSION_RATIO_EXCEEDED",
+  "case_id": "FCB-023",
+  "category": "limits",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_011/work/bundles/FCB-023.cell"
+  ],
+  "description": "Compression ratio exceeds limit",
+  "elapsed_ms": 35.825415994622745,
+  "expected_codes": [
+    "BUNDLE_COMPRESSION_RATIO_EXCEEDED"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_COMPRESSION_RATIO_EXCEEDED\",\"message\":\"Bundle compression ratio exceeds limit: payload/compressible.bin:819200/812>100\"}}\n",
+  "unsafe_allow": false
+}

@@ -1,0 +1,22 @@
+{
+  "actual_code": "BUNDLE_PATH_DUPLICATE",
+  "case_id": "FCB-018",
+  "category": "archive_paths",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/paper_evidence/2026-03-09/78a1635/raw/runner_fail_closed_bench_v1/repeat_017/work/bundles/FCB-018.cell"
+  ],
+  "description": "Duplicate normalized path",
+  "elapsed_ms": 36.21650001150556,
+  "expected_codes": [
+    "BUNDLE_PATH_DUPLICATE"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"BUNDLE_PATH_DUPLICATE\",\"message\":\"Bundle has duplicate normalized path: manifest.json\"}}\n",
+  "unsafe_allow": false
+}

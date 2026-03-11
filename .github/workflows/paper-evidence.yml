@@ -1,0 +1,46 @@
+name: Public Evidence Anchor
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-anchor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify canonical evidence files
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="paper_evidence/2026-03-09/78a1635"
+          test -d "${EVIDENCE_DIR}"
+          test -f "${EVIDENCE_DIR}/env.json"
+          test -f "${EVIDENCE_DIR}/summary.json"
+          test -f "${EVIDENCE_DIR}/summary.md"
+          test -f "${EVIDENCE_DIR}/paper_table.md"
+          test -f "${EVIDENCE_DIR}/reproduce.md"
+          test -f "${EVIDENCE_DIR}/figures/determinism_stability.png"
+          test -f "${EVIDENCE_DIR}/figures/latency_distribution.png"
+          test -f "${EVIDENCE_DIR}/figures/size_breakdown.png"
+
+      - name: Verify benchmark support assets
+        run: |
+          set -euo pipefail
+          BENCH_DIR="projects/agif_numeric_extraction_research_fix/07_assets/public_benchmark_v1"
+          test -f "${BENCH_DIR}/cases.json"
+          test -f "${BENCH_DIR}/gate_config.json"
+          test -f "${BENCH_DIR}/manifest.json"
+          grep -q 'cases.json' "${BENCH_DIR}/README.md"
+          grep -q 'gate_config.json' "${BENCH_DIR}/README.md"
+
+      - name: Verify evidence documentation
+        run: |
+          set -euo pipefail
+          grep -q '78a1635' docs/PAPER_EVIDENCE_R1.md
+          grep -q 'agif-paper-evidence-r1-78a1635-clean-n30-portable.zip' docs/PAPER_EVIDENCE_R1.md
+          grep -q 'audit/results' docs/PAPER_EVIDENCE_R1.md

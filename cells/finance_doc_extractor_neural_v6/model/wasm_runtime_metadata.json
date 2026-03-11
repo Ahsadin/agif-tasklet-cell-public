@@ -1,0 +1,12 @@
+{
+  "candle_backend_version": "strict_candle_v6.1",
+  "deterministic_build": true,
+  "deterministic_build_profile": "release_lto_optz_symbols_stripped",
+  "resolved_build_target": "wasm32-wasip1",
+  "runtime_backend": "strict_candle_v6",
+  "runtime_model_source": "logic_wasm_candle_v6",
+  "runtime_model_type": "wasm_candle_int8",
+  "schema": "agif_wasm_runtime_metadata_v6",
+  "wasm_module_hash": "05ad672cf664be6fb5a97c25db917a4eac355bf6dff4ccefb95f5988c87c37e8",
+  "wasm_target_policy": "wasm32-wasi"
+}

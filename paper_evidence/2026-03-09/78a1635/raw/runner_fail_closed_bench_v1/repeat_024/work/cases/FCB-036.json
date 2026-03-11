@@ -1,0 +1,26 @@
+{
+  "actual_code": "POLICY_PRESET_INVALID",
+  "case_id": "FCB-036",
+  "category": "runtime_policy",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "run",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/cells/finance_doc_extractor_neural_v1.cell",
+    "--policy-preset",
+    "bad",
+    "--input",
+    "{\"account_context\":{\"cost_center\":\"CC-BENCH\",\"ledger_profile\":\"ap_default\",\"vendor_hint\":\"Fail Closed Vendor\"},\"currency_hint\":\"USD\",\"doc_id\":\"fail-closed-bench\",\"import_event\":\"on_import\",\"locale\":\"en-US\",\"ocr_text\":\"INVOICE FAIL CLOSED BENCH subtotal 100 tax 10 total 110\",\"source_type\":\"invoice\"}"
+  ],
+  "description": "Invalid runtime policy preset rejected",
+  "elapsed_ms": 11.669541010633111,
+  "expected_codes": [
+    "POLICY_PRESET_INVALID"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 2,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"POLICY_PRESET_INVALID\",\"message\":\"Policy preset must be one of: strict,balanced,dev\"}}\n",
+  "unsafe_allow": false
+}

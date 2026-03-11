@@ -1,0 +1,38 @@
+{
+  "doc_id": "doc-reg-001",
+  "source_type": "invoice",
+  "import_event": "on_import",
+  "ocr_text": "Invoice REG-001 supplier ACME GMB subtotal 1000 tax 100 total 1100",
+  "locale": "en-US",
+  "currency_hint": "USD",
+  "account_context": {
+    "ledger_profile": "ap_default",
+    "cost_center": "CC-REG",
+    "vendor_hint": "ACME GMB"
+  },
+  "routing_label": "accounts_payable_invoice",
+  "confidence": 0.95,
+  "extracted_fields": {
+    "vendor_name": "ACME GMB",
+    "invoice_number": "REG-001",
+    "invoice_date": "2026-02-28",
+    "due_date": "2026-03-30",
+    "currency": "USD",
+    "subtotal": 1000.0,
+    "tax_total": 100.0,
+    "grand_total": 1100.0
+  },
+  "warnings": [],
+  "ranking": [
+    {
+      "candidate": "invoice",
+      "score": 0.95,
+      "reason": "invoice totals and id pattern"
+    },
+    {
+      "candidate": "receipt",
+      "score": 0.05,
+      "reason": "fallback"
+    }
+  ]
+}

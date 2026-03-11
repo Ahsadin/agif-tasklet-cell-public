@@ -1,0 +1,24 @@
+{
+  "actual_code": "SBOM_POLICY_VIOLATION",
+  "case_id": "FCB-029",
+  "category": "policy",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/fixtures/sbom/missing_sbom.cell",
+    "--policy",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/fixtures/policy/sbom_required.json"
+  ],
+  "description": "SBOM required policy rejects missing SBOM",
+  "elapsed_ms": 161.9795000005979,
+  "expected_codes": [
+    "SBOM_POLICY_VIOLATION"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"SBOM_POLICY_VIOLATION\",\"message\":\"SBOM policy check failed: sbom_required policy requires at least one SBOM file\"}}\n",
+  "unsafe_allow": false
+}

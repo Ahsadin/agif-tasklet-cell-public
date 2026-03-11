@@ -1,0 +1,406 @@
+[
+  {
+    "input": {
+      "doc_id": "doc-001",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "INVOICE ACME-445 TOTAL 1190.00 TAX 190.00",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "ap_default",
+        "cost_center": "CC-100",
+        "vendor_hint": "ACME"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.98,
+      "extracted_fields": {
+        "vendor_name": "ACME Corp",
+        "invoice_number": "ACME-445",
+        "invoice_date": "2026-02-14",
+        "due_date": "2026-03-14",
+        "currency": "USD",
+        "subtotal": 1000.0,
+        "tax_total": 190.0,
+        "grand_total": 1190.0
+      },
+      "warnings": [],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.98,
+          "reason": "invoice keyword and totals detected"
+        },
+        {
+          "candidate": "receipt",
+          "score": 0.02,
+          "reason": "low probability"
+        }
+      ]
+    },
+    "expected_output": {
+      "doc_id": "doc-001",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "INVOICE ACME-445 TOTAL 1190.00 TAX 190.00",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "ap_default",
+        "cost_center": "CC-100",
+        "vendor_hint": "ACME"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.98,
+      "extracted_fields": {
+        "vendor_name": "ACME Corp",
+        "invoice_number": "ACME-445",
+        "invoice_date": "2026-02-14",
+        "due_date": "2026-03-14",
+        "currency": "USD",
+        "subtotal": 1000.0,
+        "tax_total": 190.0,
+        "grand_total": 1190.0
+      },
+      "warnings": [],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.98,
+          "reason": "invoice keyword and totals detected"
+        },
+        {
+          "candidate": "receipt",
+          "score": 0.02,
+          "reason": "low probability"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "doc_id": "doc-002",
+      "source_type": "receipt",
+      "import_event": "on_import",
+      "ocr_text": "RECEIPT CAFE 42.35 TIP 5.00",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "expense_default",
+        "cost_center": "CC-TRAVEL",
+        "vendor_hint": "Cafe"
+      },
+      "routing_label": "expense_receipt",
+      "confidence": 0.88,
+      "extracted_fields": {
+        "vendor_name": "Cafe Midtown",
+        "invoice_number": "",
+        "invoice_date": "2026-02-20",
+        "due_date": "2026-02-20",
+        "currency": "USD",
+        "subtotal": 37.35,
+        "tax_total": 0.0,
+        "grand_total": 42.35
+      },
+      "warnings": [
+        "invoice_number_missing"
+      ],
+      "ranking": [
+        {
+          "candidate": "receipt",
+          "score": 0.88,
+          "reason": "receipt header and low amount"
+        },
+        {
+          "candidate": "invoice",
+          "score": 0.12,
+          "reason": "fallback"
+        }
+      ]
+    },
+    "expected_output": {
+      "doc_id": "doc-002",
+      "source_type": "receipt",
+      "import_event": "on_import",
+      "ocr_text": "RECEIPT CAFE 42.35 TIP 5.00",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "expense_default",
+        "cost_center": "CC-TRAVEL",
+        "vendor_hint": "Cafe"
+      },
+      "routing_label": "expense_receipt",
+      "confidence": 0.88,
+      "extracted_fields": {
+        "vendor_name": "Cafe Midtown",
+        "invoice_number": "",
+        "invoice_date": "2026-02-20",
+        "due_date": "2026-02-20",
+        "currency": "USD",
+        "subtotal": 37.35,
+        "tax_total": 0.0,
+        "grand_total": 42.35
+      },
+      "warnings": [
+        "invoice_number_missing"
+      ],
+      "ranking": [
+        {
+          "candidate": "receipt",
+          "score": 0.88,
+          "reason": "receipt header and low amount"
+        },
+        {
+          "candidate": "invoice",
+          "score": 0.12,
+          "reason": "fallback"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "doc_id": "doc-003",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "FACTURA V-778 TOTAL 238,00 IVA 38,00",
+      "locale": "es-ES",
+      "currency_hint": "EUR",
+      "account_context": {
+        "ledger_profile": "ap_emea",
+        "cost_center": "CC-MADRID",
+        "vendor_hint": "Proveedor SA"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.94,
+      "extracted_fields": {
+        "vendor_name": "Proveedor SA",
+        "invoice_number": "V-778",
+        "invoice_date": "2026-02-18",
+        "due_date": "2026-03-20",
+        "currency": "EUR",
+        "subtotal": 200.0,
+        "tax_total": 38.0,
+        "grand_total": 238.0
+      },
+      "warnings": [],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.94,
+          "reason": "factura and iva tokens"
+        },
+        {
+          "candidate": "statement",
+          "score": 0.06,
+          "reason": "secondary class"
+        }
+      ]
+    },
+    "expected_output": {
+      "doc_id": "doc-003",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "FACTURA V-778 TOTAL 238,00 IVA 38,00",
+      "locale": "es-ES",
+      "currency_hint": "EUR",
+      "account_context": {
+        "ledger_profile": "ap_emea",
+        "cost_center": "CC-MADRID",
+        "vendor_hint": "Proveedor SA"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.94,
+      "extracted_fields": {
+        "vendor_name": "Proveedor SA",
+        "invoice_number": "V-778",
+        "invoice_date": "2026-02-18",
+        "due_date": "2026-03-20",
+        "currency": "EUR",
+        "subtotal": 200.0,
+        "tax_total": 38.0,
+        "grand_total": 238.0
+      },
+      "warnings": [],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.94,
+          "reason": "factura and iva tokens"
+        },
+        {
+          "candidate": "statement",
+          "score": 0.06,
+          "reason": "secondary class"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "doc_id": "doc-004",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "INV ??? 0001 TOTAL unreadable lines",
+      "locale": "en-GB",
+      "currency_hint": "GBP",
+      "account_context": {
+        "ledger_profile": "ap_uk",
+        "cost_center": "CC-LDN",
+        "vendor_hint": "Unknown"
+      },
+      "routing_label": "needs_review",
+      "confidence": 0.51,
+      "extracted_fields": {
+        "vendor_name": "Unknown",
+        "invoice_number": "0001",
+        "invoice_date": "2026-02-10",
+        "due_date": "2026-03-12",
+        "currency": "GBP",
+        "subtotal": 0.0,
+        "tax_total": 0.0,
+        "grand_total": 0.0
+      },
+      "warnings": [
+        "low_ocr_quality",
+        "amount_fields_unreliable"
+      ],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.51,
+          "reason": "weak invoice tokens"
+        },
+        {
+          "candidate": "receipt",
+          "score": 0.49,
+          "reason": "ambiguous document form"
+        }
+      ]
+    },
+    "expected_output": {
+      "doc_id": "doc-004",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "INV ??? 0001 TOTAL unreadable lines",
+      "locale": "en-GB",
+      "currency_hint": "GBP",
+      "account_context": {
+        "ledger_profile": "ap_uk",
+        "cost_center": "CC-LDN",
+        "vendor_hint": "Unknown"
+      },
+      "routing_label": "needs_review",
+      "confidence": 0.51,
+      "extracted_fields": {
+        "vendor_name": "Unknown",
+        "invoice_number": "0001",
+        "invoice_date": "2026-02-10",
+        "due_date": "2026-03-12",
+        "currency": "GBP",
+        "subtotal": 0.0,
+        "tax_total": 0.0,
+        "grand_total": 0.0
+      },
+      "warnings": [
+        "low_ocr_quality",
+        "amount_fields_unreliable"
+      ],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.51,
+          "reason": "weak invoice tokens"
+        },
+        {
+          "candidate": "receipt",
+          "score": 0.49,
+          "reason": "ambiguous document form"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "doc_id": "doc-005",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "Invoice 9007 subtotal 400 tax 40 total 440",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "ap_default",
+        "cost_center": "CC-200",
+        "vendor_hint": "Delta Supplies"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.93,
+      "extracted_fields": {
+        "vendor_name": "Delta Supplies",
+        "invoice_number": "9007",
+        "invoice_date": "2026-02-22",
+        "due_date": "2026-03-24",
+        "currency": "USD",
+        "subtotal": 400.0,
+        "tax_total": 40.0,
+        "grand_total": 440.0
+      },
+      "warnings": [
+        "ranking_tie_threshold"
+      ],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.93,
+          "reason": "strong totals and id pattern"
+        },
+        {
+          "candidate": "statement",
+          "score": 0.93,
+          "reason": "header ambiguity resolved by rule"
+        }
+      ]
+    },
+    "expected_output": {
+      "doc_id": "doc-005",
+      "source_type": "invoice",
+      "import_event": "on_import",
+      "ocr_text": "Invoice 9007 subtotal 400 tax 40 total 440",
+      "locale": "en-US",
+      "currency_hint": "USD",
+      "account_context": {
+        "ledger_profile": "ap_default",
+        "cost_center": "CC-200",
+        "vendor_hint": "Delta Supplies"
+      },
+      "routing_label": "accounts_payable_invoice",
+      "confidence": 0.93,
+      "extracted_fields": {
+        "vendor_name": "Delta Supplies",
+        "invoice_number": "9007",
+        "invoice_date": "2026-02-22",
+        "due_date": "2026-03-24",
+        "currency": "USD",
+        "subtotal": 400.0,
+        "tax_total": 40.0,
+        "grand_total": 440.0
+      },
+      "warnings": [
+        "ranking_tie_threshold"
+      ],
+      "ranking": [
+        {
+          "candidate": "invoice",
+          "score": 0.93,
+          "reason": "strong totals and id pattern"
+        },
+        {
+          "candidate": "statement",
+          "score": 0.93,
+          "reason": "header ambiguity resolved by rule"
+        }
+      ]
+    }
+  }
+]

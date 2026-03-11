@@ -1,0 +1,240 @@
+[
+  {
+    "input": {
+      "doc_id": "cmp-001",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "ACME Corp",
+        "invoice_number": "ACME-445",
+        "invoice_date": "2026-02-14",
+        "due_date": "2026-03-14",
+        "currency": "USD",
+        "subtotal": 1000.0,
+        "tax_total": 190.0,
+        "grand_total": 1190.0
+      },
+      "is_complete": true,
+      "missing_fields": [],
+      "warning_codes": [],
+      "status_code": "COMPLETE"
+    },
+    "expected_output": {
+      "doc_id": "cmp-001",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "ACME Corp",
+        "invoice_number": "ACME-445",
+        "invoice_date": "2026-02-14",
+        "due_date": "2026-03-14",
+        "currency": "USD",
+        "subtotal": 1000.0,
+        "tax_total": 190.0,
+        "grand_total": 1190.0
+      },
+      "is_complete": true,
+      "missing_fields": [],
+      "warning_codes": [],
+      "status_code": "COMPLETE"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "cmp-002",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "",
+        "invoice_number": "INV-777",
+        "invoice_date": "",
+        "due_date": "2026-03-16",
+        "currency": "USD",
+        "subtotal": 200.0,
+        "tax_total": 20.0,
+        "grand_total": 220.0
+      },
+      "is_complete": false,
+      "missing_fields": [
+        "vendor_name",
+        "invoice_date"
+      ],
+      "warning_codes": [
+        "required_field_missing"
+      ],
+      "status_code": "INCOMPLETE_REQUIRED_FIELDS"
+    },
+    "expected_output": {
+      "doc_id": "cmp-002",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "",
+        "invoice_number": "INV-777",
+        "invoice_date": "",
+        "due_date": "2026-03-16",
+        "currency": "USD",
+        "subtotal": 200.0,
+        "tax_total": 20.0,
+        "grand_total": 220.0
+      },
+      "is_complete": false,
+      "missing_fields": [
+        "vendor_name",
+        "invoice_date"
+      ],
+      "warning_codes": [
+        "required_field_missing"
+      ],
+      "status_code": "INCOMPLETE_REQUIRED_FIELDS"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "cmp-003",
+      "source_type": "invoice",
+      "locale": "de-DE",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "Nord GmbH",
+        "invoice_number": "DE-122",
+        "invoice_date": "2026-02-11",
+        "due_date": "2026-03-13",
+        "currency": "EUR",
+        "subtotal": 0.0,
+        "tax_total": 0.0,
+        "grand_total": 0.0
+      },
+      "is_complete": false,
+      "missing_fields": [
+        "subtotal",
+        "grand_total"
+      ],
+      "warning_codes": [
+        "amount_fields_missing_or_zero"
+      ],
+      "status_code": "INCOMPLETE_TOTALS"
+    },
+    "expected_output": {
+      "doc_id": "cmp-003",
+      "source_type": "invoice",
+      "locale": "de-DE",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "Nord GmbH",
+        "invoice_number": "DE-122",
+        "invoice_date": "2026-02-11",
+        "due_date": "2026-03-13",
+        "currency": "EUR",
+        "subtotal": 0.0,
+        "tax_total": 0.0,
+        "grand_total": 0.0
+      },
+      "is_complete": false,
+      "missing_fields": [
+        "subtotal",
+        "grand_total"
+      ],
+      "warning_codes": [
+        "amount_fields_missing_or_zero"
+      ],
+      "status_code": "INCOMPLETE_TOTALS"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "cmp-004",
+      "source_type": "receipt",
+      "locale": "en-US",
+      "required_profile": "receipt_relaxed",
+      "extracted_fields": {
+        "vendor_name": "Cafe Midtown",
+        "invoice_number": "",
+        "invoice_date": "2026-02-20",
+        "due_date": "2026-02-20",
+        "currency": "USD",
+        "subtotal": 37.35,
+        "tax_total": 0.0,
+        "grand_total": 42.35
+      },
+      "is_complete": true,
+      "missing_fields": [],
+      "warning_codes": [
+        "invoice_number_not_required_for_receipt"
+      ],
+      "status_code": "COMPLETE_WITH_PROFILE_EXCEPTION"
+    },
+    "expected_output": {
+      "doc_id": "cmp-004",
+      "source_type": "receipt",
+      "locale": "en-US",
+      "required_profile": "receipt_relaxed",
+      "extracted_fields": {
+        "vendor_name": "Cafe Midtown",
+        "invoice_number": "",
+        "invoice_date": "2026-02-20",
+        "due_date": "2026-02-20",
+        "currency": "USD",
+        "subtotal": 37.35,
+        "tax_total": 0.0,
+        "grand_total": 42.35
+      },
+      "is_complete": true,
+      "missing_fields": [],
+      "warning_codes": [
+        "invoice_number_not_required_for_receipt"
+      ],
+      "status_code": "COMPLETE_WITH_PROFILE_EXCEPTION"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "cmp-005",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "Delta Supplies",
+        "invoice_number": "INV-9007",
+        "invoice_date": "2026-02-22",
+        "due_date": "2026-03-24",
+        "currency": "USD",
+        "subtotal": 400.0,
+        "tax_total": 40.0,
+        "grand_total": 440.0
+      },
+      "is_complete": false,
+      "missing_fields": [],
+      "warning_codes": [
+        "schema_type_mismatch_detected"
+      ],
+      "status_code": "REVIEW_SCHEMA_MISMATCH"
+    },
+    "expected_output": {
+      "doc_id": "cmp-005",
+      "source_type": "invoice",
+      "locale": "en-US",
+      "required_profile": "invoice_strict",
+      "extracted_fields": {
+        "vendor_name": "Delta Supplies",
+        "invoice_number": "INV-9007",
+        "invoice_date": "2026-02-22",
+        "due_date": "2026-03-24",
+        "currency": "USD",
+        "subtotal": 400.0,
+        "tax_total": 40.0,
+        "grand_total": 440.0
+      },
+      "is_complete": false,
+      "missing_fields": [],
+      "warning_codes": [
+        "schema_type_mismatch_detected"
+      ],
+      "status_code": "REVIEW_SCHEMA_MISMATCH"
+    }
+  }
+]

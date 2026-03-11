@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "doc_id",
+    "source_type",
+    "import_event",
+    "ocr_text",
+    "locale",
+    "currency_hint",
+    "account_context",
+    "routing_label",
+    "confidence",
+    "extracted_fields",
+    "warnings",
+    "ranking",
+    "abstain",
+    "abstain_reason_code",
+    "claim_support_score",
+    "evidence_refs"
+  ],
+  "properties": {
+    "doc_id": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "import_event": {
+      "type": "string"
+    },
+    "ocr_text": {
+      "type": "string"
+    },
+    "locale": {
+      "type": "string"
+    },
+    "currency_hint": {
+      "type": "string"
+    },
+    "account_context": {
+      "type": "object",
+      "required": [
+        "ledger_profile",
+        "cost_center"
+      ],
+      "properties": {
+        "ledger_profile": {
+          "type": "string"
+        },
+        "cost_center": {
+          "type": "string"
+        },
+        "vendor_hint": {
+          "type": "string"
+        }
+      }
+    },
+    "routing_label": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number"
+    },
+    "extracted_fields": {
+      "type": "object",
+      "required": [
+        "vendor_name",
+        "invoice_number",
+        "invoice_date",
+        "due_date",
+        "currency",
+        "subtotal",
+        "tax_total",
+        "grand_total"
+      ],
+      "properties": {
+        "vendor_name": {
+          "type": "string"
+        },
+        "invoice_number": {
+          "type": "string"
+        },
+        "invoice_date": {
+          "type": "string"
+        },
+        "due_date": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "tax_total": {
+          "type": "number"
+        },
+        "grand_total": {
+          "type": "number"
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ranking": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "candidate",
+          "score"
+        ],
+        "properties": {
+          "candidate": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "abstain": {
+      "type": "boolean"
+    },
+    "abstain_reason_code": {
+      "type": "string"
+    },
+    "claim_support_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "field",
+          "source",
+          "snippet",
+          "support"
+        ],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "support": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          }
+        }
+      }
+    }
+  }
+}

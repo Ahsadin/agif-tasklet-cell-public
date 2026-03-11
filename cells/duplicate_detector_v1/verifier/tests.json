@@ -1,0 +1,420 @@
+[
+  {
+    "input": {
+      "doc_id": "dup-001",
+      "vendor_name": "ACME Corp",
+      "invoice_number": "INV-445",
+      "invoice_date": "2026-02-14",
+      "grand_total": 1190.0,
+      "currency": "USD",
+      "content_hash": "sha256:1111",
+      "candidate_set": [
+        {
+          "doc_id": "hist-001",
+          "vendor_name": "ACME Corp",
+          "invoice_number": "INV-445",
+          "invoice_date": "2026-02-14",
+          "grand_total": 1190.0,
+          "currency": "USD",
+          "content_hash": "sha256:1111"
+        },
+        {
+          "doc_id": "hist-002",
+          "vendor_name": "ACME Corp",
+          "invoice_number": "INV-999",
+          "invoice_date": "2026-01-20",
+          "grand_total": 990.0,
+          "currency": "USD",
+          "content_hash": "sha256:2222"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-001",
+          "score": 1.0,
+          "match_level": "EXACT",
+          "reason": "content_hash+invoice_number+amount"
+        },
+        {
+          "doc_id": "hist-002",
+          "score": 0.21,
+          "match_level": "LOW",
+          "reason": "vendor only"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH",
+        "EXACT_INVOICE_ID"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    },
+    "expected_output": {
+      "doc_id": "dup-001",
+      "vendor_name": "ACME Corp",
+      "invoice_number": "INV-445",
+      "invoice_date": "2026-02-14",
+      "grand_total": 1190.0,
+      "currency": "USD",
+      "content_hash": "sha256:1111",
+      "candidate_set": [
+        {
+          "doc_id": "hist-001",
+          "vendor_name": "ACME Corp",
+          "invoice_number": "INV-445",
+          "invoice_date": "2026-02-14",
+          "grand_total": 1190.0,
+          "currency": "USD",
+          "content_hash": "sha256:1111"
+        },
+        {
+          "doc_id": "hist-002",
+          "vendor_name": "ACME Corp",
+          "invoice_number": "INV-999",
+          "invoice_date": "2026-01-20",
+          "grand_total": 990.0,
+          "currency": "USD",
+          "content_hash": "sha256:2222"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-001",
+          "score": 1.0,
+          "match_level": "EXACT",
+          "reason": "content_hash+invoice_number+amount"
+        },
+        {
+          "doc_id": "hist-002",
+          "score": 0.21,
+          "match_level": "LOW",
+          "reason": "vendor only"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH",
+        "EXACT_INVOICE_ID"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "dup-002",
+      "vendor_name": "Delta Supplies",
+      "invoice_number": "DEL-9007",
+      "invoice_date": "2026-02-22",
+      "grand_total": 440.0,
+      "currency": "USD",
+      "content_hash": "sha256:abc9",
+      "candidate_set": [
+        {
+          "doc_id": "hist-010",
+          "vendor_name": "Delta Supplies",
+          "invoice_number": "DEL-9007-A",
+          "invoice_date": "2026-02-21",
+          "grand_total": 440.0,
+          "currency": "USD",
+          "content_hash": "sha256:abca"
+        },
+        {
+          "doc_id": "hist-011",
+          "vendor_name": "Delta Supplies",
+          "invoice_number": "DEL-1111",
+          "invoice_date": "2026-02-01",
+          "grand_total": 320.0,
+          "currency": "USD",
+          "content_hash": "sha256:abcb"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-010",
+          "score": 0.86,
+          "match_level": "NEAR",
+          "reason": "same vendor+amount close invoice id"
+        },
+        {
+          "doc_id": "hist-011",
+          "score": 0.18,
+          "match_level": "LOW",
+          "reason": "vendor only"
+        }
+      ],
+      "match_reason_codes": [
+        "NEAR_METADATA_MATCH"
+      ],
+      "status_code": "DUPLICATE_REVIEW"
+    },
+    "expected_output": {
+      "doc_id": "dup-002",
+      "vendor_name": "Delta Supplies",
+      "invoice_number": "DEL-9007",
+      "invoice_date": "2026-02-22",
+      "grand_total": 440.0,
+      "currency": "USD",
+      "content_hash": "sha256:abc9",
+      "candidate_set": [
+        {
+          "doc_id": "hist-010",
+          "vendor_name": "Delta Supplies",
+          "invoice_number": "DEL-9007-A",
+          "invoice_date": "2026-02-21",
+          "grand_total": 440.0,
+          "currency": "USD",
+          "content_hash": "sha256:abca"
+        },
+        {
+          "doc_id": "hist-011",
+          "vendor_name": "Delta Supplies",
+          "invoice_number": "DEL-1111",
+          "invoice_date": "2026-02-01",
+          "grand_total": 320.0,
+          "currency": "USD",
+          "content_hash": "sha256:abcb"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-010",
+          "score": 0.86,
+          "match_level": "NEAR",
+          "reason": "same vendor+amount close invoice id"
+        },
+        {
+          "doc_id": "hist-011",
+          "score": 0.18,
+          "match_level": "LOW",
+          "reason": "vendor only"
+        }
+      ],
+      "match_reason_codes": [
+        "NEAR_METADATA_MATCH"
+      ],
+      "status_code": "DUPLICATE_REVIEW"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "dup-003",
+      "vendor_name": "Northwind AB",
+      "invoice_number": "NW-404",
+      "invoice_date": "2026-02-10",
+      "grand_total": 238.0,
+      "currency": "EUR",
+      "content_hash": "sha256:xyz1",
+      "candidate_set": [
+        {
+          "doc_id": "hist-100",
+          "vendor_name": "Northwind AB",
+          "invoice_number": "NW-300",
+          "invoice_date": "2026-01-01",
+          "grand_total": 100.0,
+          "currency": "EUR",
+          "content_hash": "sha256:xyz2"
+        }
+      ],
+      "duplicate_detected": false,
+      "duplicate_candidates": [],
+      "match_reason_codes": [],
+      "status_code": "NO_DUPLICATE"
+    },
+    "expected_output": {
+      "doc_id": "dup-003",
+      "vendor_name": "Northwind AB",
+      "invoice_number": "NW-404",
+      "invoice_date": "2026-02-10",
+      "grand_total": 238.0,
+      "currency": "EUR",
+      "content_hash": "sha256:xyz1",
+      "candidate_set": [
+        {
+          "doc_id": "hist-100",
+          "vendor_name": "Northwind AB",
+          "invoice_number": "NW-300",
+          "invoice_date": "2026-01-01",
+          "grand_total": 100.0,
+          "currency": "EUR",
+          "content_hash": "sha256:xyz2"
+        }
+      ],
+      "duplicate_detected": false,
+      "duplicate_candidates": [],
+      "match_reason_codes": [],
+      "status_code": "NO_DUPLICATE"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "dup-004",
+      "vendor_name": "Cafe Midtown",
+      "invoice_number": "",
+      "invoice_date": "2026-02-20",
+      "grand_total": 42.35,
+      "currency": "USD",
+      "content_hash": "sha256:rrr1",
+      "candidate_set": [
+        {
+          "doc_id": "hist-201",
+          "vendor_name": "Cafe Midtown",
+          "invoice_number": "",
+          "invoice_date": "2026-02-20",
+          "grand_total": 42.35,
+          "currency": "USD",
+          "content_hash": "sha256:rrr1"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-201",
+          "score": 0.95,
+          "match_level": "EXACT",
+          "reason": "receipt hash and amount match"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    },
+    "expected_output": {
+      "doc_id": "dup-004",
+      "vendor_name": "Cafe Midtown",
+      "invoice_number": "",
+      "invoice_date": "2026-02-20",
+      "grand_total": 42.35,
+      "currency": "USD",
+      "content_hash": "sha256:rrr1",
+      "candidate_set": [
+        {
+          "doc_id": "hist-201",
+          "vendor_name": "Cafe Midtown",
+          "invoice_number": "",
+          "invoice_date": "2026-02-20",
+          "grand_total": 42.35,
+          "currency": "USD",
+          "content_hash": "sha256:rrr1"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-201",
+          "score": 0.95,
+          "match_level": "EXACT",
+          "reason": "receipt hash and amount match"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    }
+  },
+  {
+    "input": {
+      "doc_id": "dup-005",
+      "vendor_name": "Proveedor SA",
+      "invoice_number": "V-778",
+      "invoice_date": "2026-02-18",
+      "grand_total": 238.0,
+      "currency": "EUR",
+      "content_hash": "sha256:es01",
+      "candidate_set": [
+        {
+          "doc_id": "hist-301",
+          "vendor_name": "Proveedor SA",
+          "invoice_number": "V-778",
+          "invoice_date": "2026-02-18",
+          "grand_total": 238.0,
+          "currency": "EUR",
+          "content_hash": "sha256:es01"
+        },
+        {
+          "doc_id": "hist-302",
+          "vendor_name": "Proveedor SA",
+          "invoice_number": "V-778-B",
+          "invoice_date": "2026-02-18",
+          "grand_total": 238.0,
+          "currency": "EUR",
+          "content_hash": "sha256:es02"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-301",
+          "score": 1.0,
+          "match_level": "EXACT",
+          "reason": "all primary identifiers match"
+        },
+        {
+          "doc_id": "hist-302",
+          "score": 0.73,
+          "match_level": "NEAR",
+          "reason": "same date+amount+vendor"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH",
+        "EXACT_INVOICE_ID",
+        "NEAR_METADATA_MATCH"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    },
+    "expected_output": {
+      "doc_id": "dup-005",
+      "vendor_name": "Proveedor SA",
+      "invoice_number": "V-778",
+      "invoice_date": "2026-02-18",
+      "grand_total": 238.0,
+      "currency": "EUR",
+      "content_hash": "sha256:es01",
+      "candidate_set": [
+        {
+          "doc_id": "hist-301",
+          "vendor_name": "Proveedor SA",
+          "invoice_number": "V-778",
+          "invoice_date": "2026-02-18",
+          "grand_total": 238.0,
+          "currency": "EUR",
+          "content_hash": "sha256:es01"
+        },
+        {
+          "doc_id": "hist-302",
+          "vendor_name": "Proveedor SA",
+          "invoice_number": "V-778-B",
+          "invoice_date": "2026-02-18",
+          "grand_total": 238.0,
+          "currency": "EUR",
+          "content_hash": "sha256:es02"
+        }
+      ],
+      "duplicate_detected": true,
+      "duplicate_candidates": [
+        {
+          "doc_id": "hist-301",
+          "score": 1.0,
+          "match_level": "EXACT",
+          "reason": "all primary identifiers match"
+        },
+        {
+          "doc_id": "hist-302",
+          "score": 0.73,
+          "match_level": "NEAR",
+          "reason": "same date+amount+vendor"
+        }
+      ],
+      "match_reason_codes": [
+        "EXACT_CONTENT_HASH",
+        "EXACT_INVOICE_ID",
+        "NEAR_METADATA_MATCH"
+      ],
+      "status_code": "DUPLICATE_BLOCK"
+    }
+  }
+]

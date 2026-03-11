@@ -1,0 +1,32 @@
+{
+  "config_version": "v4_model_config",
+  "model_profile": "tiny_transformer_int8_cpu",
+  "base_model_candidates": [
+    "tinybert",
+    "distilbert"
+  ],
+  "selected_base_model": "tinybert",
+  "model_revision": "v4",
+  "max_seq_length": 256,
+  "tokenizer": {
+    "name": "v4_fixed_tokenizer",
+    "do_lower_case": true,
+    "truncation": "longest_first",
+    "padding": "max_length",
+    "deterministic": true
+  },
+  "tasks": {
+    "primary": "vat_rate_classification",
+    "secondary": [
+      "routing_classification",
+      "extraction_support"
+    ]
+  },
+  "onnx": {
+    "provider": "CPUExecutionProvider",
+    "quantization": "dynamic_int8",
+    "target_opset": 17,
+    "allow_gpu": false,
+    "allow_cloud": false
+  }
+}

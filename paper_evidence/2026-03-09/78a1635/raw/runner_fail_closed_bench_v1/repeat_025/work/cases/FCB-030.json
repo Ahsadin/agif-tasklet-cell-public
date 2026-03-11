@@ -1,0 +1,24 @@
+{
+  "actual_code": "ATTESTATION_POLICY_VIOLATION",
+  "case_id": "FCB-030",
+  "category": "policy",
+  "command": [
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/runner/cell",
+    "validate",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/fixtures/attestations/invalid_attestation.cell",
+    "--policy",
+    "/private/tmp/agif_tasklet_cell_paper_anchor_78a1635_clean/fixtures/policy/attestation_required.json"
+  ],
+  "description": "Attestation required policy rejects invalid attestation",
+  "elapsed_ms": 189.27670799894258,
+  "expected_codes": [
+    "ATTESTATION_POLICY_VIOLATION"
+  ],
+  "matched_expected_code": true,
+  "payload_parse_error": null,
+  "rejected": true,
+  "return_code": 5,
+  "stderr": "",
+  "stdout": "{\"ok\":false,\"error\":{\"code\":\"ATTESTATION_POLICY_VIOLATION\",\"message\":\"Attestation policy check failed: attestation JSON invalid: attestations/provenance.json line 1 column 12\"}}\n",
+  "unsafe_allow": false
+}
