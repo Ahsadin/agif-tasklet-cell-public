@@ -3,10 +3,10 @@ message: "If you use this repository, please cite the public software release an
 title: "AGIF Tasklet Cells: Verifier-Backed Offline AI Artifacts for Native Applications"
 type: software
 version: "1.0.2"
-doi: 10.5281/zenodo.18950170
+doi: 10.5281/zenodo.18950210
 date-released: 2026-03-11
 repository-code: "https://github.com/Ahsadin/agif-tasklet-cell-public"
-url: "https://doi.org/10.5281/zenodo.18950170"
+url: "https://doi.org/10.5281/zenodo.18950210"
 authors:
   - family-names: "Khan"
     given-names: "Danish"

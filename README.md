@@ -24,7 +24,7 @@ This public snapshot does not include private CellPOS product code, packaging, l
 
 ## Evidence And Publication
 
-- Software archive DOI: [10.5281/zenodo.18950170](https://doi.org/10.5281/zenodo.18950170)
+- Software archive DOI: [10.5281/zenodo.18950210](https://doi.org/10.5281/zenodo.18950210)
 - Paper DOI: [10.5281/zenodo.18946355](https://doi.org/10.5281/zenodo.18946355)
 - Canonical clean evidence anchor: `paper_evidence/2026-03-09/78a1635/`
 - Portable bundle filename for release publishing: `agif-paper-evidence-r1-78a1635-clean-n30-portable.zip`
