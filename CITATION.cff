@@ -3,7 +3,9 @@ message: "If you use this repository, please cite the public software release an
 title: "AGIF Tasklet Cells: Verifier-Backed Offline AI Artifacts for Native Applications"
 type: software
 authors:
-  - name: "Ahsadin"
+  - family-names: "Khan"
+    given-names: "Danish"
+    affiliation: "ENFSystems LLC"
 license: Apache-2.0
 abstract: "Public research snapshot for verifier-backed offline AI artifacts, including core framework code, public benchmark assets, and the clean paper-evidence anchor used by the AGIF whitepaper."
 keywords:
